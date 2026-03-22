@@ -3,120 +3,162 @@ import random
 import psycopg2
 import os
 import sys
+import pandas as pd
 
 # Add the current directory to sys.path to import modules
 sys.path.append(os.getcwd())
 from bplustree import BPlusTree
 from db import get_connection
 
-def setup_benchmark_data(num_items=5000):
-    """Ensure the database and B+ Tree are populated with consistent test data."""
-    print(f"Populating database with {num_items} test lost items...")
+def setup_pg_table():
+    """Create a dedicated table for benchmarking PostgreSQL B-Tree."""
     conn = get_connection()
     cur = conn.cursor()
-    
     try:
-        # Get valid order IDs to associate with lost items
-        cur.execute("SELECT order_id FROM freshwash.laundry_order LIMIT 1000")
-        order_ids = [r[0] for r in cur.fetchall()]
-        
-        if not order_ids:
-            print("Error: No orders found in database. Run bulk_data_gen.py first.")
-            return None, None
-
-        # Clean old data to avoid interference
-        cur.execute("DELETE FROM freshwash.lost_item WHERE item_description LIKE 'Test Item %'")
-        
-        # Insert test data
-        items = []
-        for i in range(1, num_items + 1):
-            order_id = random.choice(order_ids)
-            desc = f"Test Item {i}"
-            comp = round(random.uniform(50, 500), 2)
-            cur.execute(
-                "INSERT INTO freshwash.lost_item (lost_id, order_id, item_description, compensation_amount) "
-                "VALUES (%s, %s, %s, %s)",
-                (i + 100000, order_id, desc, comp) # Offset IDs to avoid conflicts
+        cur.execute("DROP TABLE IF EXISTS freshwash.benchmark_test CASCADE")
+        cur.execute("""
+            CREATE TABLE freshwash.benchmark_test (
+                id INT PRIMARY KEY,
+                value TEXT
             )
-            items.append((i + 100000, desc))
-            
+        """)
         conn.commit()
-        print("Database populated.")
-        
-        # Populate Module A B+ Tree
-        print("Populating Module A B+ Tree index...")
-        tree = BPlusTree(order=4)
-        for lid, desc in items:
-            tree.insert(lid, desc)
-        print("B+ Tree populated.")
-        
-        return items, tree
-        
+        return True
     except Exception as e:
         conn.rollback()
-        print(f"Error during setup: {e}")
-        return None, None
+        print(f"Error setting up PG table: {e}")
+        return False
     finally:
         cur.close()
         conn.close()
 
-def run_benchmarks(items, tree):
-    """Compare performance across different access methods."""
-    num_tests = 500
-    test_ids = [random.choice(items)[0] for _ in range(num_tests)]
+def run_benchmarks(data_size=5000):
+    """Run comprehensive benchmarks for both PG and Module B B+ Tree."""
+    print(f"\n--- Starting Benchmarks (Data Size: {data_size}) ---")
     
-    print(f"\nRunning {num_tests} search operations...")
+    test_keys = list(range(1, data_size + 1))
+    random.shuffle(test_keys)
+    data = [(k, f"Value_{k}") for k in test_keys]
+    sample_keys = random.sample(test_keys, min(1000, data_size))
     
-    # 1. PostgreSQL (B-Tree Index Scan)
+    results = []
+
+    # --- PostgreSQL Benchmarks ---
+    print("Running PostgreSQL benchmarks...")
+    setup_pg_table()
     conn = get_connection()
     cur = conn.cursor()
-    start = time.perf_counter()
-    for lid in test_ids:
-        cur.execute("SELECT item_description FROM freshwash.lost_item WHERE lost_id = %s", (lid,))
-        cur.fetchone()
-    pg_time = (time.perf_counter() - start) * 1000
-    print(f"PostgreSQL (B-Tree Index): {pg_time:.2f} ms total ({pg_time/num_tests:.4f} ms/op)")
-
-    # 2. Module A B+ Tree (In-memory Index)
-    start = time.perf_counter()
-    for lid in test_ids:
-        tree.search(lid)
-    tree_time = (time.perf_counter() - start) * 1000
-    print(f"Module A B+ Tree Index: {tree_time:.2f} ms total ({tree_time/num_tests:.4f} ms/op)")
-
-    # 3. Range Query Comparison
-    num_range_tests = 50
-    range_ranges = []
-    for _ in range(num_range_tests):
-        start_id = random.randint(100001, 104000)
-        end_id = start_id + 500
-        range_ranges.append((start_id, end_id))
-
-    print(f"\nRunning {num_range_tests} range queries (width 500)...")
     
-    # PG Range
+    # 1. Insert
     start = time.perf_counter()
-    for s, e in range_ranges:
-        cur.execute("SELECT item_description FROM freshwash.lost_item WHERE lost_id BETWEEN %s AND %s", (s, e))
+    cur.executemany("INSERT INTO freshwash.benchmark_test (id, value) VALUES (%s, %s)", data)
+    conn.commit()
+    results.append({"Engine": "PostgreSQL", "Operation": "INSERT", "Time (ms)": (time.perf_counter() - start) * 1000})
+    
+    # 2. Select (Point)
+    start = time.perf_counter()
+    for k in sample_keys:
+        cur.execute("SELECT value FROM freshwash.benchmark_test WHERE id = %s", (k,))
+        cur.fetchone()
+    # Normalize to total data size for fair comparison with bulk operations
+    results.append({"Engine": "PostgreSQL", "Operation": "SELECT_POINT", "Time (ms)": ((time.perf_counter() - start) * 1000) / len(sample_keys) * data_size})
+    
+    # 2b. Select (Miss)
+    miss_keys = list(range(data_size + 1, data_size + 1001))
+    start = time.perf_counter()
+    for k in miss_keys:
+        cur.execute("SELECT value FROM freshwash.benchmark_test WHERE id = %s", (k,))
+        cur.fetchone()
+    results.append({"Engine": "PostgreSQL", "Operation": "SELECT_MISS", "Time (ms)": ((time.perf_counter() - start) * 1000) / len(miss_keys) * data_size})
+    
+    # 3. Range Query
+    num_ranges = 50
+    ranges = [(s, s + 100) for s in [random.randint(1, data_size - 100) for _ in range(num_ranges)]]
+    start = time.perf_counter()
+    for s, e in ranges:
+        cur.execute("SELECT * FROM freshwash.benchmark_test WHERE id BETWEEN %s AND %s", (s, e))
         cur.fetchall()
-    pg_range_time = (time.perf_counter() - start) * 1000
-    print(f"PostgreSQL Range: {pg_range_time:.2f} ms total ({pg_range_time/num_range_tests:.4f} ms/op)")
-
-    # B+ Tree Range
+    results.append({"Engine": "PostgreSQL", "Operation": "SELECT_RANGE", "Time (ms)": ((time.perf_counter() - start) * 1000) / num_ranges})
+    
+    # 4. Update
+    update_data = [(f"NewValue_{k}", k) for k in sample_keys]
     start = time.perf_counter()
-    for s, e in range_ranges:
-        tree.range_query(s, e)
-    tree_range_time = (time.perf_counter() - start) * 1000
-    print(f"Module A B+ Tree Range: {tree_range_time:.2f} ms total ({tree_range_time/num_range_tests:.4f} ms/op)")
-
+    cur.executemany("UPDATE freshwash.benchmark_test SET value = %s WHERE id = %s", update_data)
+    conn.commit()
+    results.append({"Engine": "PostgreSQL", "Operation": "UPDATE", "Time (ms)": ((time.perf_counter() - start) * 1000) / len(sample_keys) * data_size})
+    
+    # 5. Delete
+    start = time.perf_counter()
+    cur.execute("DELETE FROM freshwash.benchmark_test")
+    conn.commit()
+    results.append({"Engine": "PostgreSQL", "Operation": "DELETE_ALL", "Time (ms)": (time.perf_counter() - start) * 1000})
+    
     cur.close()
     conn.close()
+
+    # --- Module B B+ Tree Benchmarks ---
+    print("Running Module B B+ Tree benchmarks...")
+    tree = BPlusTree(order=64)
     
-    # Speedup Factors
-    print(f"\nSpeedup (Search): {pg_time / tree_time:.1f}x faster using Module A Engine")
-    print(f"Speedup (Range): {pg_range_time / tree_range_time:.1f}x faster using Module A Engine")
+    # 1. Insert
+    start = time.perf_counter()
+    for k, v in data:
+        tree.insert(k, v)
+    results.append({"Engine": "Module B B+ Tree", "Operation": "INSERT", "Time (ms)": (time.perf_counter() - start) * 1000})
+    
+    # 2. Select (Point)
+    start = time.perf_counter()
+    for k in sample_keys:
+        tree.search(k)
+    results.append({"Engine": "Module B B+ Tree", "Operation": "SELECT_POINT", "Time (ms)": ((time.perf_counter() - start) * 1000) / len(sample_keys) * data_size})
+    
+    # 2b. Select (Miss)
+    start = time.perf_counter()
+    for k in miss_keys:
+        tree.search(k)
+    results.append({"Engine": "Module B B+ Tree", "Operation": "SELECT_MISS", "Time (ms)": ((time.perf_counter() - start) * 1000) / len(miss_keys) * data_size})
+    
+    # 3. Range Query
+    start = time.perf_counter()
+    for s, e in ranges:
+        tree.range_query(s, e)
+    results.append({"Engine": "Module B B+ Tree", "Operation": "SELECT_RANGE", "Time (ms)": ((time.perf_counter() - start) * 1000) / num_ranges})
+    
+    # 4. Update
+    start = time.perf_counter()
+    for k in sample_keys:
+        tree.update(k, f"NewValue_{k}")
+    results.append({"Engine": "Module B B+ Tree", "Operation": "UPDATE", "Time (ms)": ((time.perf_counter() - start) * 1000) / len(sample_keys) * data_size})
+    
+    # 5. Delete
+    start = time.perf_counter()
+    for k in test_keys:
+        tree.delete(k)
+    results.append({"Engine": "Module B B+ Tree", "Operation": "DELETE_ALL", "Time (ms)": (time.perf_counter() - start) * 1000})
+    
+    # --- Summary & CSV ---
+    df = pd.DataFrame(results)
+    df['Data Size'] = data_size
+    
+    # Pivot for quick comparison
+    summary = df.pivot(index='Operation', columns='Engine', values='Time (ms)')
+    summary['Speedup (x)'] = summary['PostgreSQL'] / summary['Module B B+ Tree']
+    
+    print("\nBenchmark Summary (Times in ms):")
+    print(summary.to_string())
+    
+    # Save to CSV
+    csv_file = 'benchmark_results.csv'
+    if os.path.exists(csv_file):
+        df.to_csv(csv_file, mode='a', header=False, index=False)
+    else:
+        df.to_csv(csv_file, index=False)
+    print(f"\nResults appended to {csv_file}")
 
 if __name__ == "__main__":
-    items, tree = setup_benchmark_data(5000)
-    if items:
-        run_benchmarks(items, tree)
+    import argparse
+    parser = argparse.ArgumentParser(description='Run Module B Benchmarks')
+    parser.add_argument('--size', type=int, default=5000, help='Number of records to benchmark')
+    args = parser.parse_args()
+    
+    run_benchmarks(args.size)
