@@ -15,9 +15,16 @@ Ensure you have the following installed:
 
 ---
 
-## Module A: The Indexing Engine
+### Module A: The Indexing Engine
 
-Module A implements a high-performance B+ Tree from scratch in C++ with a Python wrapper.
+Module A implements a high-performance B+ Tree from scratch in C++ with a Python wrapper, now with full ACID support and crash recovery.
+
+#### ACID & Crash Recovery Demonstration
+Run the ACID compliance test suite to verify Atomicity, Consistency, Isolation, Durability, and Recovery:
+```bash
+cd Module_A/database/
+python3 demo_acid.py
+```
 
 ### Compilation
 Compile the C++ core into a shared library for Python use:
