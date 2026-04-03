@@ -12,6 +12,7 @@ Ensure you have the following installed:
 - Python: 3.8+ (with psycopg2, Flask, Flask-CORS, pandas, matplotlib, Faker)
 - Database: PostgreSQL 15+
 - Frontend: Node.js (v18+) and npm
+<<<<<<< HEAD
 
 ---
 
@@ -25,6 +26,15 @@ Run the ACID compliance test suite to verify Atomicity, Consistency, Isolation, 
 cd Module_A/database/
 python3 demo_acid.py
 ```
+=======
+- Linux OS
+
+---
+
+## Module A: The Indexing Engine
+
+Module A implements a high-performance B+ Tree from scratch in C++ with a Python wrapper.
+>>>>>>> 5106d20e04e023bb85f1f0afd5c0076488b1bf0a
 
 ### Compilation
 Compile the C++ core into a shared library for Python use:
@@ -53,7 +63,12 @@ Initialize the PostgreSQL database:
 sudo -u postgres psql -c "CREATE DATABASE freshwashdb ENCODING 'UTF8';"
 
 # Load the schema (from the root directory)
+<<<<<<< HEAD
 sudo -u postgres psql -d freshwashdb -f Module_B/sql/schema.sql
+=======
+sudo -u postgres psql -d freshwashdb -f ../../Module_B/sql/schema.sql
+
+>>>>>>> 5106d20e04e023bb85f1f0afd5c0076488b1bf0a
 ```
 *Default DB Credentials: User: postgres, Password: mypassword, DB: freshwashdb*
 

@@ -1,9 +1,0 @@
-# FreshWash Backend Requirements (Python)
-flask
-flask-cors
-psycopg2-binary
-Faker
-pandas
-matplotlib
-numpy
-graphviz

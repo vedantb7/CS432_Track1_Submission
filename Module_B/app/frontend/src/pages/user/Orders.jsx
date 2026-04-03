@@ -171,7 +171,7 @@ const UserOrders = () => {
                     </td>
                     <td>
                       <span className="employee-badge">
-                        Unassigned
+                        {order.handler_name || 'Unassigned'}
                       </span>
                     </td>
                     <td>
@@ -240,7 +240,7 @@ const UserOrders = () => {
                   <label>Handler</label>
                   <p>
                     <span className="employee-badge">
-                      Unassigned
+                      {selectedOrder.handler_name || 'Unassigned'}
                     </span>
                   </p>
                 </div>

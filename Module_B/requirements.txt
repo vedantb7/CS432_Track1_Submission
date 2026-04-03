@@ -4,6 +4,12 @@ react-dom >= 19.0.0
 vite >= 6.0.0
 react-router-dom >= 6.0.0      # Routing & Navigation
 lucide-react >= 0.400.0        # Icon Library
+psycopg2
 flask
 flask-cors
-psycopg2
+psycopg2-binary
+Faker
+pandas
+matplotlib
+numpy
+graphviz
