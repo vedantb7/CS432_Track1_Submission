@@ -1,4 +1,19 @@
 import psycopg2
+import sys
+import os
+
+parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../Module_A/database"))
+if parent_dir not in sys.path:
+    sys.path.append(parent_dir)
+
+from db_manager import DBManager
+db_manager = DBManager("module_b_wal.log")
+db_manager.create_table("Users")
+db_manager.create_table("Products")
+db_manager.create_table("Orders")
+
+def get_db_manager():
+    return db_manager
 
 def get_connection():
     conn = psycopg2.connect(
