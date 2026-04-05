@@ -1,0 +1,74 @@
+{
+  "tests": [
+    {
+      "test": "ATOMICITY_CONCURRENT_INSERTS",
+      "status": "PASS",
+      "duration": 0.007337045994063374,
+      "timestamp": "2026-04-05T10:51:49.984067",
+      "details": "All 50 inserts committed atomically"
+    },
+    {
+      "test": "ATOMICITY_MULTI_TABLE_UPDATES",
+      "status": "PASS",
+      "duration": 0.0006185199963510968,
+      "timestamp": "2026-04-05T10:51:49.984765",
+      "details": "Multi-table: Users=1, Products=1, Orders=1"
+    },
+    {
+      "test": "CONSISTENCY_CONSTRAINT_VALIDATION",
+      "status": "PASS",
+      "duration": 0.0005590299988398328,
+      "timestamp": "2026-04-05T10:51:49.985371",
+      "details": "All 2 records have valid data"
+    },
+    {
+      "test": "ISOLATION_CONCURRENT_UPDATES",
+      "status": "PASS",
+      "duration": 0.016542820005270187,
+      "timestamp": "2026-04-05T10:51:50.001954",
+      "details": "All 20 updates completed successfully"
+    },
+    {
+      "test": "RACE_CONDITION_SAME_KEY",
+      "status": "PASS",
+      "duration": 0.07263890000467654,
+      "timestamp": "2026-04-05T10:51:50.074702",
+      "details": "Race handled: 100 updates, final=thread_7_iter_9"
+    },
+    {
+      "test": "FAILURE_SIMULATION_ROLLBACK",
+      "status": "PASS",
+      "duration": 0.002126195999153424,
+      "timestamp": "2026-04-05T10:51:50.077002",
+      "details": "Serialization lock working: 1 records with isolation"
+    },
+    {
+      "test": "FAILURE_SIMULATION_RECOVERY",
+      "status": "PASS",
+      "duration": 0.0010190660032094456,
+      "timestamp": "2026-04-05T10:51:50.078097",
+      "details": "Transaction committed and lock released properly"
+    },
+    {
+      "test": "STRESS_TEST_HIGH_THROUGHPUT",
+      "status": "PASS",
+      "duration": 9.55317864400422,
+      "timestamp": "2026-04-05T10:51:59.631348",
+      "details": "10000 ops (1047 ops/sec), Success: 100.0%"
+    },
+    {
+      "test": "DURABILITY_PERSISTENCE",
+      "status": "PASS",
+      "duration": 0.0059536800035857596,
+      "timestamp": "2026-04-05T10:51:59.637569",
+      "details": "Data inserted and persisted in tables: 5 records"
+    }
+  ],
+  "timestamp": "2026-04-05T10:51:49.849567",
+  "summary": {
+    "total": 9,
+    "passed": 9,
+    "failed": 0,
+    "duration": 9.660980111999379
+  }
+}

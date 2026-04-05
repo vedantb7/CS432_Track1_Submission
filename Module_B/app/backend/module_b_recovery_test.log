@@ -1,0 +1,4 @@
+{"type": "BEGIN", "txn": "T1", "lsn": 1}
+{"type": "COMMIT", "txn": "T1", "lsn": 2}
+{"type": "BEGIN", "txn": "T1", "lsn": 3}
+{"type": "COMMIT", "txn": "T1", "lsn": 4}
