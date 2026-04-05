@@ -1,11 +1,14 @@
 import os
 import sys
 import pandas as pd
+import random
+import time
 
 # Add the current directory to sys.path to import modules
 sys.path.append(os.getcwd())
 from main import app
-from db import get_db_manager
+from db import get_db_manager, get_connection
+from bplustree import BPlusTree
 
 def setup_pg_table():
     """Create a dedicated table for benchmarking PostgreSQL B-Tree."""
