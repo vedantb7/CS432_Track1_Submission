@@ -1,3 +1,17 @@
 __pycache__/
 *.pyc
 
+# Generated ACID / load-test artifacts
+acid_*.json
+acid_*.log
+acid_*.csv
+locust_*.csv
+locust_*.json
+locust.log
+final_evidence_report.md
+module_b_evidence.md
+all_results.json
+benchmark_results.csv
+*.png
+.ipynb_checkpoints/
+

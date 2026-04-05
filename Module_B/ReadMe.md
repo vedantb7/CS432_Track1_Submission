@@ -3,6 +3,13 @@
 ## Overview
 Module B implements a production-grade FreshWash web application with comprehensive ACID property testing under concurrent load. It validates transaction correctness, crash recovery, and system reliability when many users access the system simultaneously.
 
+The current test coverage is split into two layers:
+- DB-level ACID tests in `app/backend/test_acid_db_level.py`
+- API-level ACID tests in `app/backend/test_acid_api_level.py`
+
+For a short summary of what each test does, see `app/backend/db_api_tests_brief.md`.
+For a detailed walkthrough of the test logic and assertions, see `app/backend/db_api_tests_detailed.md`.
+
 ---
 
 ## Part 1: Environment Setup
@@ -37,54 +44,68 @@ python3 -c "import sys; sys.path.append('../../../Module_A/database'); from db_m
 ### Step 2.1: Execute Complete Test Suite
 ```bash
 cd app/backend/
-python3 test_module_b_complete.py
+python3 test_acid_db_level.py
+python3 test_acid_api_level.py
 ```
 
 **What This Tests:**
 
-| Test Case | Purpose | ACID Property |
-|-----------|---------|--------------|
-| ATOMICITY_CONCURRENT_INSERTS | All 50 inserts commit together | Atomicity |
-| ATOMICITY_MULTI_TABLE_UPDATES | 3-table transaction atomicity | Atomicity |
-| CONSISTENCY_CONSTRAINT_VALIDATION | No invalid data states | Consistency |
-| ISOLATION_CONCURRENT_UPDATES | 20 threads update without interference | Isolation |
-| RACE_CONDITION_SAME_KEY | 10 threads race on same key | Isolation |
-| FAILURE_SIMULATION_ROLLBACK | Exception causes rollback | Atomicity |
-| FAILURE_SIMULATION_RECOVERY | Data survives crash/restart | Durability |
-| STRESS_TEST_HIGH_THROUGHPUT | 100 threads × 100 ops each | All ACID |
-| DURABILITY_PERSISTENCE | Data persists across restart | Durability |
+| Test Case | Purpose | Layer |
+|-----------|---------|-------|
+| `A1_ATOMICITY_CONCURRENT_INSERTS` | All 50 inserts commit together | DB |
+| `A2_ATOMICITY_ROLLBACK_LEAVES_NO_TRACE` | Rollback removes dirty writes | DB |
+| `A3_ATOMICITY_MULTI_TABLE` | 3-table transaction atomicity | DB |
+| `C1_CONSISTENCY_NEGATIVE_BALANCE_REJECTED` | Invalid state is rejected and rolled back | DB |
+| `I1_ISOLATION_CONCURRENT_UPDATES` | 20 threads update without interference | DB |
+| `I2_ISOLATION_RACE_CONDITION_SAME_KEY` | Multiple threads race on one key | DB |
+| `F1_FAILURE_ROLLBACK_ON_EXCEPTION` | Exception causes rollback | DB |
+| `F2_FAILURE_CRASH_RECOVERY` | Data survives crash/restart via WAL | DB |
+| `D1_DURABILITY_WAL_PERSISTED` | WAL contains committed records | DB |
+| `S1_STRESS_HIGH_THROUGHPUT` | Concurrent stress workload | DB |
+| `API_A1_CONCURRENT_CHECKOUT_ATOMICITY` | Concurrent checkout does not oversell | API |
+| `API_I1_RACE_CONDITION_LAST_UNIT` | Many buyers race for the last unit | API |
+| `API_F1_FAILURE_INJECTION_ROLLBACK` | Simulated failure returns error and rolls back | API |
+| `API_C1_CONCURRENT_USERS_CONFIGURABLE` | Configurable concurrent users + ramp-up | API |
+| `API_D1_PROCESS_RESTART_DURABILITY` | Committed order persists | API |
 
 ### Step 2.2: Viewing Test Results
 ```bash
 # View detailed JSON results
-cat test_results.json
+cat acid_db_results.json
+cat acid_api_results.json
 
 # View human-readable evidence
 cat module_b_evidence.md
+cat db_api_tests_brief.md
+cat db_api_tests_detailed.md
 ```
 
 **Expected Output Files:**
-- `test_results.json` — Machine-readable results with metrics
+- `acid_db_results.json` — Machine-readable DB-level results with metrics
+- `acid_api_results.json` — Machine-readable API-level results with metrics
 - `module_b_evidence.md` — Comprehensive evidence report
+- `db_api_tests_brief.md` — Short summary of every DB/API test
+- `db_api_tests_detailed.md` — Detailed explanation of every DB/API test
 - Console output with per-test status (PASS/FAIL)
 
 ### Step 2.3: Expected Results Summary
 ```
-TEST SUMMARY
+DB/API TEST SUMMARY
 ====================================================================
-Total Tests: 9
-Passed: 9 (100%)
+DB-Level Tests: 10
+API-Level Tests: 5
+Passed: 15/15 (100%)
 Failed: 0 (0%)
-Total Duration: ~30-60 seconds
+Total Duration: depends on machine load
 ====================================================================
 
 By Category:
-  ATOMICITY: 2/2 passed
-  CONSISTENCY: 1/1 passed
-  ISOLATION: 2/2 passed
-  FAILURE: 2/2 passed
-  STRESS: 1/1 passed
-  DURABILITY: 1/1 passed
+  ATOMICITY: DB + API covered
+  CONSISTENCY: DB covered
+  ISOLATION: DB + API covered
+  FAILURE: DB + API covered
+  STRESS: DB covered
+  DURABILITY: DB + API covered
 ```
 
 ---
@@ -146,28 +167,40 @@ What This Means:
 ```bash
 cd app/backend/
 
-# To increase stress intensity, edit test_module_b_complete.py:
-# Change STRESS_TEST_THREADS = 100 to higher value
-# Change NUM_OPS_PER_USER = 100 to higher value
+# DB-level stress test is the custom Python multithreaded workload in:
+#   test_acid_db_level.py
 
-# Then run:
-python3 test_module_b_complete.py
+# API/load stress test uses Locust via:
+#   locustfile.py
+
+# Then run the DB test suite:
+python3 test_acid_db_level.py
+
+# And for API/load testing:
+locust -f locustfile.py --host http://127.0.0.1:5001
 ```
 
 ### Step 4.2: Analyze Performance Metrics
-The stress test measures:
+The stress tests measure:
 - **Throughput**: Operations per second (ops/sec)
 - **Success Rate**: Percentage of operations completed
 - **Concurrent Threads**: Number of simultaneous threads
-- **Cache Efficiency**: B+ Tree vs PostgreSQL comparison
+- **Latency Percentiles**: p50, p95, p99 response times
+- **Failure Rate**: Number of rejected or failed operations
+
+**DB-level stress test:** uses Python `threading` inside `test_acid_db_level.py`.
+
+**API-level stress test:** uses Locust (`locustfile.py`, `run_locust_headless.py`).
 
 **Typical Results:**
 ```
-STRESS_TEST_HIGH_THROUGHPUT:
-- 100 threads × 100 ops = 10,000 total operations
-- Duration: 2-5 seconds
-- Throughput: 2,000-5,000 ops/sec
-- Success Rate: 95-100%
+S1_STRESS_HIGH_THROUGHPUT:
+- Concurrent threads and ops are configurable in the DB suite
+- Throughput and success ratio are reported by the Python test runner
+
+Locust stress run:
+- 50 users, 5 spawn rate
+- Throughput and latency metrics captured in CSV/JSON outputs
 ```
 
 ---
@@ -222,14 +255,17 @@ Running on http://0.0.0.0:5001
 WARNING: This is a development server. Do not use it in production.
 ```
 
-### Step 6.2: Run API-Level Concurrency Test (Future Enhancement)
+### Step 6.2: Run API-Level Concurrency Test
 ```bash
-# Edit test_module_b_complete.py to add:
-def test_api_concurrent_requests():
-    """Test concurrent HTTP requests to API endpoints"""
-    # Coming in extended version
-    pass
+python3 test_acid_api_level.py
 ```
+
+### Step 6.3: What the API tests cover
+- Concurrent checkout against shared stock
+- Race condition on the last available unit
+- Failure injection through `simulate_failure=true`
+- Configurable concurrent user load with ramp-up
+- Commit visibility for persisted orders
 
 ---
 
@@ -241,10 +277,14 @@ After running tests, you'll have:
 ```
 Module_B/
 ├── app/backend/
-│   ├── test_results.json          # Machine-readable results
+│   ├── acid_db_results.json       # DB-level machine-readable results
+│   ├── acid_api_results.json      # API-level machine-readable results
 │   ├── module_b_evidence.md       # Human-readable evidence
-│   ├── module_b_*.log             # Transaction logs
-│   └── test_module_b_complete.py  # Test suite
+│   ├── db_api_tests_brief.md      # Short summary of DB/API tests
+│   ├── db_api_tests_detailed.md   # Detailed explanation of DB/API tests
+│   ├── traceability_matrix.md     # Requirement to test mapping
+│   ├── final_evidence_report.md   # Final combined report
+│   └── test_acid_*.py             # DB/API test suites
 ├── report/
 │   └── optimization_report.ipynb  # Performance analysis
 └── ReadMe.md                      # This file

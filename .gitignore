@@ -9,6 +9,21 @@ __pycache__/
 # Bench output
 Module_A/database/benchmark_results.csv
 
+# Module B generated test artifacts and logs
+Module_B/app/backend/__pycache__/
+Module_B/app/backend/*.log
+Module_B/app/backend/acid_*.json
+Module_B/app/backend/acid_*.log
+Module_B/app/backend/locust_*.csv
+Module_B/app/backend/locust_*.json
+Module_B/app/backend/locust.log
+Module_B/app/backend/final_evidence_report.md
+Module_B/app/backend/module_b_evidence.md
+Module_B/app/backend/all_results.json
+Module_B/app/backend/benchmark_results.csv
+Module_B/app/backend/*.png
+Module_B/app/backend/.ipynb_checkpoints/
+
 # Python
 __pycache__/
 *.pyc

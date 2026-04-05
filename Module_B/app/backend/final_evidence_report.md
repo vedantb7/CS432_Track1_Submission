@@ -1,6 +1,6 @@
 # Final Evidence Report — CS432 Track 1 Module B
 
-_Generated: 2026-04-05 15:07:43_
+_Generated: 2026-04-05 17:00:20_
 
 ---
 
@@ -8,7 +8,7 @@ _Generated: 2026-04-05 15:07:43_
 
 | Metric | Value |
 |--------|-------|
-| Report Date | 2026-04-05 15:07:43 |
+| Report Date | 2026-04-05 17:00:20 |
 | Overall Result | **✅ ALL TESTS PASSED** |
 | DB-Level Tests | 10/10 passed |
 | API-Level Tests | 5/5 passed |
@@ -20,53 +20,53 @@ _Generated: 2026-04-05 15:07:43_
 
 ### A1_ATOMICITY_CONCURRENT_INSERTS
 - **Status**: ✅ PASS
-- **Duration**: 0.052s
+- **Duration**: 0.109s
 - **Details**: All 50 inserts committed atomically (count=50)
 
 ### A2_ATOMICITY_ROLLBACK_LEAVES_NO_TRACE
 - **Status**: ✅ PASS
-- **Duration**: 0.004s
+- **Duration**: 0.012s
 - **Details**: Rollback removed all dirty writes; only baseline survives (count=1)
 
 ### A3_ATOMICITY_MULTI_TABLE
 - **Status**: ✅ PASS
-- **Duration**: 0.005s
+- **Duration**: 0.011s
 - **Details**: All 3 tables updated: Users=1, Products=1, Orders=1
 
 ### C1_CONSISTENCY_NEGATIVE_BALANCE_REJECTED
 - **Status**: ✅ PASS
-- **Duration**: 0.005s
+- **Duration**: 0.010s
 - **Details**: Negative balance rejected by txn_update; rollback restored state
 
 ### I1_ISOLATION_CONCURRENT_UPDATES
 - **Status**: ✅ PASS
-- **Duration**: 0.063s
+- **Duration**: 0.190s
 - **Details**: All 20 concurrent updates completed without interference
 
 ### I2_ISOLATION_RACE_CONDITION_SAME_KEY
 - **Status**: ✅ PASS
-- **Duration**: 0.053s
+- **Duration**: 0.166s
 - **Details**: All 25 serialized updates completed; final={"v": "T2_it4"}
 
 ### F1_FAILURE_ROLLBACK_ON_EXCEPTION
 - **Status**: ✅ PASS
-- **Duration**: 0.003s
+- **Duration**: 0.014s
 - **Details**: Rollback succeeded: baseline=1, dirty_mid=2, final=1
 
 ### F2_FAILURE_CRASH_RECOVERY
 - **Status**: ✅ PASS
-- **Duration**: 0.002s
+- **Duration**: 0.007s
 - **Details**: Crash-recovery via WAL replay: record={'value': 'survived'}
 
 ### D1_DURABILITY_WAL_PERSISTED
 - **Status**: ✅ PASS
-- **Duration**: 0.010s
+- **Duration**: 0.032s
 - **Details**: WAL contains 5 INSERT + 5 COMMIT records — durability proven
 
 ### S1_STRESS_HIGH_THROUGHPUT
 - **Status**: ✅ PASS
-- **Duration**: 2.195s
-- **Details**: 1000 ops in 2.20s → 456 ops/s | success=1000/1000 (100.0%)
+- **Duration**: 7.267s
+- **Details**: 1000 ops in 7.27s → 138 ops/s | success=1000/1000 (100.0%)
 
 ---
 
@@ -74,7 +74,7 @@ _Generated: 2026-04-05 15:07:43_
 
 ### API_A1_CONCURRENT_CHECKOUT_ATOMICITY
 - **Status**: ✅ PASS
-- **Duration**: 1.985s
+- **Duration**: 2.025s
 - **Details**: Stock integrity preserved: 0 remaining (20 orders, 0 rejected)
 - **Metrics**:
   - `virtual_users`: 20
@@ -82,13 +82,13 @@ _Generated: 2026-04-05 15:07:43_
   - `failed_orders`: 0
   - `remaining_stock`: 0
   - `expected_stock`: 0
-  - `p50_latency_s`: 1.0137
-  - `p95_latency_s`: 1.9111
-  - `p99_latency_s`: 1.9111
+  - `p50_latency_s`: 1.0295
+  - `p95_latency_s`: 1.9276
+  - `p99_latency_s`: 1.9276
 
 ### API_I1_RACE_CONDITION_LAST_UNIT
 - **Status**: ✅ PASS
-- **Duration**: 0.091s
+- **Duration**: 0.299s
 - **Details**: Race condition handled: exactly 1 buyer won, stock=0
 - **Metrics**:
   - `race_buyers`: 15
@@ -98,7 +98,7 @@ _Generated: 2026-04-05 15:07:43_
 
 ### API_F1_FAILURE_INJECTION_ROLLBACK
 - **Status**: ✅ PASS
-- **Duration**: 0.023s
+- **Duration**: 0.052s
 - **Details**: Simulated failure returned 400; stock & balance rolled back correctly
 - **Metrics**:
   - `http_status`: 400
@@ -110,22 +110,22 @@ _Generated: 2026-04-05 15:07:43_
 
 ### API_C1_CONCURRENT_USERS_CONFIGURABLE
 - **Status**: ✅ PASS
-- **Duration**: 1.964s
-- **Details**: All 20 virtual users completed successfully | p95=0.103s | 10.2 tx/s
+- **Duration**: 2.049s
+- **Details**: All 20 virtual users completed successfully | p95=0.040s | 9.8 tx/s
 - **Metrics**:
   - `virtual_users`: 20
   - `ramp_up_sec`: 2
   - `successes`: 20
   - `failures`: 0
-  - `p50_latency_s`: 0.0117
-  - `p95_latency_s`: 0.1031
-  - `p99_latency_s`: 0.1031
-  - `throughput_rps`: 10.18
+  - `p50_latency_s`: 0.0284
+  - `p95_latency_s`: 0.0396
+  - `p99_latency_s`: 0.0396
+  - `throughput_rps`: 9.76
 
 ### API_D1_PROCESS_RESTART_DURABILITY
 - **Status**: ✅ PASS
-- **Duration**: 0.023s
-- **Details**: Order 397574 committed and persisted in Orders table
+- **Duration**: 0.038s
+- **Details**: Order 537167 committed and persisted in Orders table
 
 ---
 
@@ -138,13 +138,13 @@ _Generated: 2026-04-05 15:07:43_
 
 | Metric | Value | Pass Threshold | Met |
 |--------|-------|---------------|-----|
-| Total Requests | 14951 | — | — |
+| Total Requests | 15329 | — | — |
 | Failures | 0 | — | — |
 | Error Rate | 0.0% | <5% | ✅ |
-| p50 Response | 120.0ms | — | — |
+| p50 Response | 110.0ms | — | — |
 | p95 Response | 0.0ms | <2000ms | ✅ |
 | p99 Response | 0.0ms | — | — |
-| Throughput | 125.1 RPS | ≥5 RPS | ✅ |
+| Throughput | 128.47 RPS | ≥5 RPS | ✅ |
 
 **Overall Locust result**: ✅ PASS
 
