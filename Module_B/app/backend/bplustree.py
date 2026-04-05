@@ -22,7 +22,35 @@ if platform.system() == "Linux":
                 pass
 
 # Load the compiled C++ shared library
-lib_path = os.path.abspath("./libdbms.so")
+# Search in multiple locations: current dir, Module_A/database, parent directories
+lib_path = None
+search_paths = [
+    "./libdbms.so",  # Current directory
+    "../../../../../../Module_A/database/libdbms.so",  # From Module_B/app/backend
+    "../../../database/libdbms.so",  # From Module_B/app backend variant
+]
+
+# Add absolute path if it exists
+import sys
+if 'CS432_Track1_Submission' in os.getcwd():
+    # Running from within the workspace
+    module_a_path = os.path.join(os.getcwd().split('CS432_Track1_Submission')[0], 
+                                 'CS432_Track1_Submission/Module_A/database/libdbms.so')
+    search_paths.append(module_a_path)
+
+for path in search_paths:
+    abs_path = os.path.abspath(path)
+    if os.path.exists(abs_path):
+        lib_path = abs_path
+        break
+
+if lib_path is None:
+    raise FileNotFoundError(
+        f"libdbms.so not found in any of the search paths:\n" +
+        "\n".join(f"  - {os.path.abspath(p)}" for p in search_paths) +
+        "\n\nPlease compile the C++ library using: g++ -shared -fPIC -O2 -o libdbms.so ../../../Module_A/database/*.cpp"
+    )
+
 lib = ctypes.CDLL(lib_path)
 
 

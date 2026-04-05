@@ -1,0 +1,2 @@
+{"type": "BEGIN", "txn": "T1", "lsn": 1}
+{"type": "COMMIT", "txn": "T1", "lsn": 2}

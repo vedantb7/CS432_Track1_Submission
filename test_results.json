@@ -3,72 +3,72 @@
     {
       "test": "ATOMICITY_CONCURRENT_INSERTS",
       "status": "PASS",
-      "duration": 0.0022284680017037317,
-      "timestamp": "2026-04-05T11:03:01.603752",
+      "duration": 0.0017832119992817752,
+      "timestamp": "2026-04-05T11:03:24.593260",
       "details": "All 50 inserts committed atomically"
     },
     {
       "test": "ATOMICITY_MULTI_TABLE_UPDATES",
       "status": "PASS",
-      "duration": 0.0005812239978695288,
-      "timestamp": "2026-04-05T11:03:01.604357",
+      "duration": 0.00068095500319032,
+      "timestamp": "2026-04-05T11:03:24.593998",
       "details": "Multi-table: Users=1, Products=1, Orders=1"
     },
     {
       "test": "CONSISTENCY_CONSTRAINT_VALIDATION",
       "status": "PASS",
-      "duration": 0.0005344729943317361,
-      "timestamp": "2026-04-05T11:03:01.604907",
+      "duration": 0.0006598669933737256,
+      "timestamp": "2026-04-05T11:03:24.594700",
       "details": "All 2 records have valid data"
     },
     {
       "test": "ISOLATION_CONCURRENT_UPDATES",
       "status": "PASS",
-      "duration": 0.016853173001436517,
-      "timestamp": "2026-04-05T11:03:01.621782",
+      "duration": 0.01538194499880774,
+      "timestamp": "2026-04-05T11:03:24.610121",
       "details": "All 20 updates completed successfully"
     },
     {
       "test": "RACE_CONDITION_SAME_KEY",
       "status": "PASS",
-      "duration": 0.10286210100457538,
-      "timestamp": "2026-04-05T11:03:01.724720",
-      "details": "Race handled: 100 updates, final=thread_8_iter_9"
+      "duration": 0.0606884410008206,
+      "timestamp": "2026-04-05T11:03:24.670921",
+      "details": "Race handled: 100 updates, final=thread_4_iter_9"
     },
     {
       "test": "FAILURE_SIMULATION_ROLLBACK",
       "status": "PASS",
-      "duration": 0.002112389003741555,
-      "timestamp": "2026-04-05T11:03:01.726957",
+      "duration": 0.001165708999906201,
+      "timestamp": "2026-04-05T11:03:24.672180",
       "details": "Serialization lock working: 1 records with isolation"
     },
     {
       "test": "FAILURE_SIMULATION_RECOVERY",
       "status": "PASS",
-      "duration": 0.0018846680031856522,
-      "timestamp": "2026-04-05T11:03:01.728898",
+      "duration": 0.0007659219991182908,
+      "timestamp": "2026-04-05T11:03:24.672997",
       "details": "Transaction committed and lock released properly"
     },
     {
       "test": "STRESS_TEST_HIGH_THROUGHPUT",
       "status": "PASS",
-      "duration": 10.52182854500279,
-      "timestamp": "2026-04-05T11:03:12.250825",
-      "details": "10000 ops (950 ops/sec), Success: 100.0%"
+      "duration": 9.615091387997381,
+      "timestamp": "2026-04-05T11:03:34.288157",
+      "details": "10000 ops (1040 ops/sec), Success: 100.0%"
     },
     {
       "test": "DURABILITY_PERSISTENCE",
       "status": "PASS",
-      "duration": 0.006707385000481736,
-      "timestamp": "2026-04-05T11:03:12.257764",
+      "duration": 0.004267139003786724,
+      "timestamp": "2026-04-05T11:03:34.292726",
       "details": "Data inserted and persisted in tables: 5 records"
     }
   ],
-  "timestamp": "2026-04-05T11:03:01.394756",
+  "timestamp": "2026-04-05T11:03:24.591295",
   "summary": {
     "total": 9,
     "passed": 9,
     "failed": 0,
-    "duration": 10.656322303999332
+    "duration": 9.701343488995917
   }
 }
