@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-04-05T15:07:42.851772",
+  "total_requests": 14995,
+  "failures": 0,
+  "error_pct": 0.0,
+  "p50_ms": 120,
+  "p95_ms": 260,
+  "p99_ms": 350,
+  "throughput_rps": 126.8,
+  "pass_criteria": {
+    "max_error_pct": 5.0,
+    "max_p95_ms": 2000,
+    "min_throughput": 5.0
+  },
+  "criteria_met": {
+    "error_pct_ok": true,
+    "p95_ok": true,
+    "throughput_ok": true
+  },
+  "overall_pass": true
+}

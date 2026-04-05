@@ -131,8 +131,8 @@ def register_routes(app):
     @app.route('/checkout', methods=['POST'])
     def checkout():
         data = request.json
-        user_id = data.get('user_id')
-        product_id = data.get('product_id')
+        user_id = int(data.get('user_id'))
+        product_id = int(data.get('product_id'))
         quantity = data.get('quantity', 1)
         simulate_failure = request.args.get('simulate_failure') == 'true'
 
@@ -167,7 +167,8 @@ def register_routes(app):
             dbm.txn_update(txn_id, "Users", user_id, {**user, "balance": new_balance})
 
             # Insert Order
-            order_id = str(uuid.uuid4())
+            import random
+            order_id = random.randint(300000, 999999)
             order_record = {
                 "user_id": user_id,
                 "product_id": product_id,

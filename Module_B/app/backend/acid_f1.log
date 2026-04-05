@@ -1,0 +1,6 @@
+{"type": "BEGIN", "txn": "T1", "lsn": 1}
+{"type": "INSERT", "txn": "T1", "table": "FailTest", "key": 8001, "after": "committed_baseline", "lsn": 2}
+{"type": "COMMIT", "txn": "T1", "lsn": 3}
+{"type": "BEGIN", "txn": "T2", "lsn": 4}
+{"type": "INSERT", "txn": "T2", "table": "FailTest", "key": 8002, "after": "dirty_write", "lsn": 5}
+{"type": "ROLLBACK", "txn": "T2", "lsn": 6}

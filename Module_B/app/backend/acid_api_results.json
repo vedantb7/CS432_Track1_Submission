@@ -1,0 +1,84 @@
+{
+  "timestamp": "2026-04-05T15:05:42.293885",
+  "summary": {
+    "total": 5,
+    "passed": 5,
+    "failed": 0,
+    "pass_pct": 100.0
+  },
+  "tests": [
+    {
+      "test": "API_A1_CONCURRENT_CHECKOUT_ATOMICITY",
+      "status": "PASS",
+      "duration": 1.984797,
+      "timestamp": "2026-04-05T15:05:40.183616",
+      "details": "Stock integrity preserved: 0 remaining (20 orders, 0 rejected)",
+      "metrics": {
+        "virtual_users": 20,
+        "successful_orders": 20,
+        "failed_orders": 0,
+        "remaining_stock": 0,
+        "expected_stock": 0,
+        "p50_latency_s": 1.0137,
+        "p95_latency_s": 1.9111,
+        "p99_latency_s": 1.9111
+      }
+    },
+    {
+      "test": "API_I1_RACE_CONDITION_LAST_UNIT",
+      "status": "PASS",
+      "duration": 0.0915,
+      "timestamp": "2026-04-05T15:05:40.275419",
+      "details": "Race condition handled: exactly 1 buyer won, stock=0",
+      "metrics": {
+        "race_buyers": 15,
+        "successes": 1,
+        "rejections": 14,
+        "final_stock": 0
+      }
+    },
+    {
+      "test": "API_F1_FAILURE_INJECTION_ROLLBACK",
+      "status": "PASS",
+      "duration": 0.02309,
+      "timestamp": "2026-04-05T15:05:40.298778",
+      "details": "Simulated failure returned 400; stock & balance rolled back correctly",
+      "metrics": {
+        "http_status": 400,
+        "response": {
+          "error": "Simulated Failure",
+          "status": "failed"
+        },
+        "stock_before": 50,
+        "stock_after": 50,
+        "balance_before": 500.0,
+        "balance_after": 500.0
+      }
+    },
+    {
+      "test": "API_C1_CONCURRENT_USERS_CONFIGURABLE",
+      "status": "PASS",
+      "duration": 1.964451,
+      "timestamp": "2026-04-05T15:05:42.263509",
+      "details": "All 20 virtual users completed successfully | p95=0.103s | 10.2 tx/s",
+      "metrics": {
+        "virtual_users": 20,
+        "ramp_up_sec": 2,
+        "successes": 20,
+        "failures": 0,
+        "p50_latency_s": 0.0117,
+        "p95_latency_s": 0.1031,
+        "p99_latency_s": 0.1031,
+        "throughput_rps": 10.18
+      }
+    },
+    {
+      "test": "API_D1_PROCESS_RESTART_DURABILITY",
+      "status": "PASS",
+      "duration": 0.022817,
+      "timestamp": "2026-04-05T15:05:42.293251",
+      "details": "Order 397574 committed and persisted in Orders table",
+      "metrics": {}
+    }
+  ]
+}

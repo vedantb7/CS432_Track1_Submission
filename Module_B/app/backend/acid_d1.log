@@ -1,0 +1,15 @@
+{"type": "BEGIN", "txn": "T1", "lsn": 1}
+{"type": "INSERT", "txn": "T1", "table": "DurableWAL", "key": 11000, "after": "{\"value\": \"val_0\"}", "lsn": 2}
+{"type": "COMMIT", "txn": "T1", "lsn": 3}
+{"type": "BEGIN", "txn": "T2", "lsn": 4}
+{"type": "INSERT", "txn": "T2", "table": "DurableWAL", "key": 11001, "after": "{\"value\": \"val_1\"}", "lsn": 5}
+{"type": "COMMIT", "txn": "T2", "lsn": 6}
+{"type": "BEGIN", "txn": "T3", "lsn": 7}
+{"type": "INSERT", "txn": "T3", "table": "DurableWAL", "key": 11002, "after": "{\"value\": \"val_2\"}", "lsn": 8}
+{"type": "COMMIT", "txn": "T3", "lsn": 9}
+{"type": "BEGIN", "txn": "T4", "lsn": 10}
+{"type": "INSERT", "txn": "T4", "table": "DurableWAL", "key": 11003, "after": "{\"value\": \"val_3\"}", "lsn": 11}
+{"type": "COMMIT", "txn": "T4", "lsn": 12}
+{"type": "BEGIN", "txn": "T5", "lsn": 13}
+{"type": "INSERT", "txn": "T5", "table": "DurableWAL", "key": 11004, "after": "{\"value\": \"val_4\"}", "lsn": 14}
+{"type": "COMMIT", "txn": "T5", "lsn": 15}

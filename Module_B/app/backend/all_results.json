@@ -1,0 +1,203 @@
+{
+  "timestamp": "2026-04-05 15:07:43",
+  "overall_pass": true,
+  "db_level": {
+    "timestamp": "2026-04-05T15:05:34.684705",
+    "summary": {
+      "total": 10,
+      "passed": 10,
+      "failed": 0,
+      "pass_pct": 100.0
+    },
+    "tests": [
+      {
+        "test": "A1_ATOMICITY_CONCURRENT_INSERTS",
+        "status": "PASS",
+        "duration": 0.05216,
+        "timestamp": "2026-04-05T15:05:32.341397",
+        "details": "All 50 inserts committed atomically (count=50)"
+      },
+      {
+        "test": "A2_ATOMICITY_ROLLBACK_LEAVES_NO_TRACE",
+        "status": "PASS",
+        "duration": 0.004433,
+        "timestamp": "2026-04-05T15:05:32.345976",
+        "details": "Rollback removed all dirty writes; only baseline survives (count=1)"
+      },
+      {
+        "test": "A3_ATOMICITY_MULTI_TABLE",
+        "status": "PASS",
+        "duration": 0.00499,
+        "timestamp": "2026-04-05T15:05:32.351181",
+        "details": "All 3 tables updated: Users=1, Products=1, Orders=1"
+      },
+      {
+        "test": "C1_CONSISTENCY_NEGATIVE_BALANCE_REJECTED",
+        "status": "PASS",
+        "duration": 0.004565,
+        "timestamp": "2026-04-05T15:05:32.356046",
+        "details": "Negative balance rejected by txn_update; rollback restored state"
+      },
+      {
+        "test": "I1_ISOLATION_CONCURRENT_UPDATES",
+        "status": "PASS",
+        "duration": 0.063326,
+        "timestamp": "2026-04-05T15:05:32.419600",
+        "details": "All 20 concurrent updates completed without interference"
+      },
+      {
+        "test": "I2_ISOLATION_RACE_CONDITION_SAME_KEY",
+        "status": "PASS",
+        "duration": 0.053314,
+        "timestamp": "2026-04-05T15:05:32.473243",
+        "details": "All 25 serialized updates completed; final={\"v\": \"T2_it4\"}"
+      },
+      {
+        "test": "F1_FAILURE_ROLLBACK_ON_EXCEPTION",
+        "status": "PASS",
+        "duration": 0.003437,
+        "timestamp": "2026-04-05T15:05:32.476906",
+        "details": "Rollback succeeded: baseline=1, dirty_mid=2, final=1"
+      },
+      {
+        "test": "F2_FAILURE_CRASH_RECOVERY",
+        "status": "PASS",
+        "duration": 0.002186,
+        "timestamp": "2026-04-05T15:05:32.479206",
+        "details": "Crash-recovery via WAL replay: record={'value': 'survived'}"
+      },
+      {
+        "test": "D1_DURABILITY_WAL_PERSISTED",
+        "status": "PASS",
+        "duration": 0.009871,
+        "timestamp": "2026-04-05T15:05:32.489195",
+        "details": "WAL contains 5 INSERT + 5 COMMIT records \u2014 durability proven"
+      },
+      {
+        "test": "S1_STRESS_HIGH_THROUGHPUT",
+        "status": "PASS",
+        "duration": 2.195028,
+        "timestamp": "2026-04-05T15:05:34.684377",
+        "details": "1000 ops in 2.20s \u2192 456 ops/s | success=1000/1000 (100.0%)"
+      }
+    ]
+  },
+  "api_level": {
+    "timestamp": "2026-04-05T15:05:42.293885",
+    "summary": {
+      "total": 5,
+      "passed": 5,
+      "failed": 0,
+      "pass_pct": 100.0
+    },
+    "tests": [
+      {
+        "test": "API_A1_CONCURRENT_CHECKOUT_ATOMICITY",
+        "status": "PASS",
+        "duration": 1.984797,
+        "timestamp": "2026-04-05T15:05:40.183616",
+        "details": "Stock integrity preserved: 0 remaining (20 orders, 0 rejected)",
+        "metrics": {
+          "virtual_users": 20,
+          "successful_orders": 20,
+          "failed_orders": 0,
+          "remaining_stock": 0,
+          "expected_stock": 0,
+          "p50_latency_s": 1.0137,
+          "p95_latency_s": 1.9111,
+          "p99_latency_s": 1.9111
+        }
+      },
+      {
+        "test": "API_I1_RACE_CONDITION_LAST_UNIT",
+        "status": "PASS",
+        "duration": 0.0915,
+        "timestamp": "2026-04-05T15:05:40.275419",
+        "details": "Race condition handled: exactly 1 buyer won, stock=0",
+        "metrics": {
+          "race_buyers": 15,
+          "successes": 1,
+          "rejections": 14,
+          "final_stock": 0
+        }
+      },
+      {
+        "test": "API_F1_FAILURE_INJECTION_ROLLBACK",
+        "status": "PASS",
+        "duration": 0.02309,
+        "timestamp": "2026-04-05T15:05:40.298778",
+        "details": "Simulated failure returned 400; stock & balance rolled back correctly",
+        "metrics": {
+          "http_status": 400,
+          "response": {
+            "error": "Simulated Failure",
+            "status": "failed"
+          },
+          "stock_before": 50,
+          "stock_after": 50,
+          "balance_before": 500.0,
+          "balance_after": 500.0
+        }
+      },
+      {
+        "test": "API_C1_CONCURRENT_USERS_CONFIGURABLE",
+        "status": "PASS",
+        "duration": 1.964451,
+        "timestamp": "2026-04-05T15:05:42.263509",
+        "details": "All 20 virtual users completed successfully | p95=0.103s | 10.2 tx/s",
+        "metrics": {
+          "virtual_users": 20,
+          "ramp_up_sec": 2,
+          "successes": 20,
+          "failures": 0,
+          "p50_latency_s": 0.0117,
+          "p95_latency_s": 0.1031,
+          "p99_latency_s": 0.1031,
+          "throughput_rps": 10.18
+        }
+      },
+      {
+        "test": "API_D1_PROCESS_RESTART_DURABILITY",
+        "status": "PASS",
+        "duration": 0.022817,
+        "timestamp": "2026-04-05T15:05:42.293251",
+        "details": "Order 397574 committed and persisted in Orders table",
+        "metrics": {}
+      }
+    ]
+  },
+  "stress_test": {
+    "timestamp": "2026-04-05T15:07:43.020422",
+    "config": {
+      "users": 50,
+      "spawn_rate": 5,
+      "run_time": "120s",
+      "host": "http://127.0.0.1:5001"
+    },
+    "stats": {
+      "total_requests": 14951,
+      "failures": 0,
+      "error_pct": 0.0,
+      "median_ms": 120.0,
+      "p95_ms": 0.0,
+      "p99_ms": 0.0,
+      "avg_ms": 135.8,
+      "min_ms": 7.17,
+      "max_ms": 571.6,
+      "throughput_rps": 125.1,
+      "failures_rps": 0.0
+    },
+    "pass_criteria": {
+      "max_error_pct": 5.0,
+      "max_p95_ms": 2000,
+      "min_throughput": 5.0
+    },
+    "criteria_met": {
+      "error_pct_ok": true,
+      "p95_ok": true,
+      "throughput_ok": true
+    },
+    "overall_pass": true,
+    "locust_exit_code": 0
+  }
+}

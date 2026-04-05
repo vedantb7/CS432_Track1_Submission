@@ -1,0 +1,5 @@
+{"type": "BEGIN", "txn": "T1", "lsn": 1}
+{"type": "INSERT", "txn": "T1", "table": "MUsers", "key": 2001, "after": "Alice", "lsn": 2}
+{"type": "INSERT", "txn": "T1", "table": "MProducts", "key": 3001, "after": "Laptop", "lsn": 3}
+{"type": "INSERT", "txn": "T1", "table": "MOrders", "key": 4001, "after": "order_ref", "lsn": 4}
+{"type": "COMMIT", "txn": "T1", "lsn": 5}
