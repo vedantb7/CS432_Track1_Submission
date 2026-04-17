@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-04-05T17:00:20.062026",
+  "timestamp": "2026-04-18T02:38:55.880117",
   "config": {
     "users": 50,
     "spawn_rate": 5,
@@ -7,16 +7,16 @@
     "host": "http://127.0.0.1:5001"
   },
   "stats": {
-    "total_requests": 15329,
+    "total_requests": 21534,
     "failures": 0,
     "error_pct": 0.0,
-    "median_ms": 110.0,
+    "median_ms": 13.0,
     "p95_ms": 0.0,
     "p99_ms": 0.0,
-    "avg_ms": 134.72,
-    "min_ms": 17.22,
-    "max_ms": 961.78,
-    "throughput_rps": 128.47,
+    "avg_ms": 15.86,
+    "min_ms": 2.53,
+    "max_ms": 67.3,
+    "throughput_rps": 180.66,
     "failures_rps": 0.0
   },
   "pass_criteria": {

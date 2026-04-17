@@ -1,3 +1,4 @@
+from shard_router import N_SHARDS
 import os
 import sys
 from bplustree import BPlusTree
@@ -13,9 +14,10 @@ def refresh_lost_items_cache():
     conn = get_connection()
     cur = conn.cursor()
     try:
-        cur.execute("SELECT lost_id, item_description FROM freshwash.lost_item")
-        rows = cur.fetchall()
-        
+        rows = []
+        for shard_id in range(N_SHARDS):
+            cur.execute(f"SELECT lost_id, item_description FROM freshwash.shard_{shard_id}_lost_item")
+            rows.extend(cur.fetchall())
         # Clear/Re-insert logic: For simplicity in this assignment, 
         # we re-initialize the tree to reflect the latest DB state.
         global lost_items_tree

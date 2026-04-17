@@ -2,6 +2,7 @@ from flask import Blueprint, jsonify, request
 from db import get_connection
 from logging_utils import audit_log
 from tree_cache import search_lost_item_fast, get_all_lost_items_range, refresh_lost_items_cache
+from shard_router import N_SHARDS, get_table, locate_lost_item_shard
 
 lost_items_bp = Blueprint('admin_lost_items', __name__)
 
@@ -12,17 +13,23 @@ def get_all_lost_items():
     conn = get_connection()
     cur = conn.cursor()
     try:
-        cur.execute(
-            "SELECT li.lost_id, li.order_id, lo.member_id, m.name, li.item_description, "
-            "li.compensation_amount, li.reported_date "
-            "FROM freshwash.lost_item li "
-            "JOIN freshwash.laundry_order lo ON li.order_id = lo.order_id "
-            "JOIN freshwash.member m ON lo.member_id = m.member_id "
-            "ORDER BY li.reported_date DESC"
-        )
-        rows = cur.fetchall()
+        results = []
+        for shard_id in range(N_SHARDS):
+            table_li = f"freshwash.shard_{shard_id}_lost_item"
+            table_lo = f"freshwash.shard_{shard_id}_laundry_order"
+            cur.execute(
+                f"SELECT li.lost_id, li.order_id, lo.member_id, m.name, li.item_description, "
+                f"li.compensation_amount, li.reported_date "
+                f"FROM {table_li} li "
+                f"JOIN {table_lo} lo ON li.order_id = lo.order_id "
+                f"JOIN freshwash.member m ON lo.member_id = m.member_id "
+            )
+            results.extend(cur.fetchall())
+        
+        results.sort(key=lambda r: r[6] if r[6] is not None else '1970-01-01', reverse=True)
+
         lost_items = []
-        for r in rows:
+        for r in results:
             lost_items.append({
                 "lost_item_id": r[0],
                 "order_id": r[1],
@@ -89,13 +96,20 @@ def get_lost_item_details(lost_item_id):
     conn = get_connection()
     cur = conn.cursor()
     try:
+        shard_id, member_id = locate_lost_item_shard(cur, lost_item_id)
+        if member_id is None:
+            return jsonify({"error": "Lost item not found"}), 404
+            
+        table_li = get_table('lost_item', member_id)
+        table_lo = get_table('laundry_order', member_id)
+
         cur.execute(
-            "SELECT li.lost_id, li.order_id, lo.member_id, m.name, m.email, m.contact_number, "
-            "li.item_description, li.compensation_amount, li.reported_date "
-            "FROM freshwash.lost_item li "
-            "JOIN freshwash.laundry_order lo ON li.order_id = lo.order_id "
-            "JOIN freshwash.member m ON lo.member_id = m.member_id "
-            "WHERE li.lost_id = %s",
+            f"SELECT li.lost_id, li.order_id, lo.member_id, m.name, m.email, m.contact_number, "
+            f"li.item_description, li.compensation_amount, li.reported_date "
+            f"FROM {table_li} li "
+            f"JOIN {table_lo} lo ON li.order_id = lo.order_id "
+            f"JOIN freshwash.member m ON lo.member_id = m.member_id "
+            f"WHERE li.lost_id = %s",
             (lost_item_id,)
         )
         row = cur.fetchone()
@@ -126,9 +140,14 @@ def update_lost_item_status(lost_item_id):
     conn = get_connection()
     cur = conn.cursor()
     try:
-        # Check if column exists, some versions of the schema might not have it
+        shard_id, member_id = locate_lost_item_shard(cur, lost_item_id)
+        if member_id is None:
+            return jsonify({"error": "Lost item not found"}), 404
+
+        table_li = get_table('lost_item', member_id)
+
         cur.execute(
-            "UPDATE freshwash.lost_item SET item_description = %s WHERE lost_id = %s",
+            f"UPDATE {table_li} SET item_description = %s WHERE lost_id = %s",
             (data.get('item_description', ''), lost_item_id)
         )
         conn.commit()

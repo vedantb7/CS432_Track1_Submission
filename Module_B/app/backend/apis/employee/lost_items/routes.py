@@ -1,3 +1,4 @@
+from shard_router import N_SHARDS
 # employee/lost_items/routes.py
 from flask import Blueprint, jsonify
 from db import get_connection
@@ -11,20 +12,29 @@ def get_assigned_lost_items(employee_id):
     conn = get_connection()
     cur  = conn.cursor()
     try:
-        cur.execute(
-            """
-            SELECT DISTINCT
-                li.lost_id, li.order_id, li.item_description,
-                li.reported_date, li.compensation_amount
-            FROM freshwash.lost_item li
-            JOIN freshwash.order_assignment oa ON oa.order_id = li.order_id
-            WHERE oa.employee_id = %s
-            ORDER BY li.reported_date DESC
-            """,
-            (employee_id,)
-        )
+        results = []
+        for shard_id in range(N_SHARDS):
+            table_li = f"freshwash.shard_{shard_id}_lost_item"
+            table_oa = f"freshwash.shard_{shard_id}_order_assignment"
+
+            cur.execute(
+                f"""
+                SELECT DISTINCT
+                    li.lost_id, li.order_id, li.item_description,
+                    li.reported_date, li.compensation_amount
+                FROM {table_li} li
+                JOIN {table_oa} oa ON oa.order_id = li.order_id
+                WHERE oa.employee_id = %s
+                """,
+                (employee_id,)
+            )
+            results.extend(cur.fetchall())
+        
+        # Sort by reported_date DESC
+        results.sort(key=lambda r: r[3], reverse=True)
+
         items = []
-        for r in cur.fetchall():
+        for r in results:
             items.append({
                 "lost_id":             r[0],
                 "order_id":            r[1],

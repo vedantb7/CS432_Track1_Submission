@@ -1,5 +1,6 @@
 from flask import Blueprint, jsonify, request
 from db import get_connection
+from shard_router import N_SHARDS, get_table, locate_order_shard
 
 orders_bp = Blueprint('admin_orders', __name__)
 
@@ -9,16 +10,21 @@ def get_all_orders():
     conn = get_connection()
     cur = conn.cursor()
     try:
-        cur.execute(
-            "SELECT lo.order_id, lo.member_id, m.name, lo.order_date, lo.pickup_time, "
-            "lo.total_amount, lo.current_status "
-            "FROM freshwash.laundry_order lo "
-            "JOIN freshwash.member m ON lo.member_id = m.member_id "
-            "ORDER BY lo.order_date DESC"
-        )
-        rows = cur.fetchall()
+        results = []
+        for shard_id in range(N_SHARDS):
+            table_lo = f"freshwash.shard_{shard_id}_laundry_order"
+            cur.execute(
+                f"SELECT lo.order_id, lo.member_id, m.name, lo.order_date, lo.pickup_time, "
+                f"lo.total_amount, lo.current_status "
+                f"FROM {table_lo} lo "
+                f"JOIN freshwash.member m ON lo.member_id = m.member_id "
+            )
+            results.extend(cur.fetchall())
+        
+        results.sort(key=lambda r: r[3], reverse=True)
+
         orders = []
-        for r in rows:
+        for r in results:
             orders.append({
                 "order_id": r[0],
                 "member_id": r[1],
@@ -50,15 +56,21 @@ def create_order():
     conn = get_connection()
     cur = conn.cursor()
     try:
+        member_id = data['member_id']
+        table_lo = get_table('laundry_order', member_id)
+        table_p = get_table('payment', member_id)
+        table_ps = get_table('payment_status', member_id)
+        table_osl = get_table('order_status_log', member_id)
+
         cur.execute(
-            """
-            INSERT INTO freshwash.laundry_order
+            f"""
+            INSERT INTO {table_lo}
                 (member_id, pickup_time, expected_delivery_time, total_amount, current_status)
             VALUES (%s, %s, %s, %s, %s)
             RETURNING order_id, order_date
             """,
             (
-                data['member_id'],
+                member_id,
                 data['pickup_time'],
                 data['expected_delivery_time'],
                 data['total_amount'],
@@ -69,21 +81,21 @@ def create_order():
         
         # 2. Create the payment record (default mode: Pending)
         cur.execute(
-            "INSERT INTO freshwash.payment (order_id, payment_mode, payment_amount, payment_date) "
-            "VALUES (%s, 'Pending', %s, CURRENT_TIMESTAMP) RETURNING payment_id",
+            f"INSERT INTO {table_p} (order_id, payment_mode, payment_amount, payment_date) "
+            f"VALUES (%s, 'Pending', %s, CURRENT_TIMESTAMP) RETURNING payment_id",
             (order_id, data['total_amount'])
         )
         payment_id = cur.fetchone()[0]
         
         # 3. Create the payment status record
         cur.execute(
-            "INSERT INTO freshwash.payment_status (payment_id, status_name) VALUES (%s, 'Pending')",
+            f"INSERT INTO {table_ps} (payment_id, status_name) VALUES (%s, 'Pending')",
             (payment_id,)
         )
 
         # 4. Optional: create an initial status log entry
         cur.execute(
-            "INSERT INTO freshwash.order_status_log (order_id, status_name) VALUES (%s, %s)",
+            f"INSERT INTO {table_osl} (order_id, status_name) VALUES (%s, %s)",
             (order_id, data.get('current_status', 'Pending')),
         )
 
@@ -102,12 +114,17 @@ def get_order_details(order_id):
     conn = get_connection()
     cur = conn.cursor()
     try:
+        shard_id, member_id = locate_order_shard(cur, order_id)
+        if member_id is None:
+            return jsonify({"error": "Order not found"}), 404
+
+        table_lo = get_table('laundry_order', member_id)
         cur.execute(
-            "SELECT lo.order_id, lo.member_id, m.name, m.email, m.contact_number, "
-            "lo.order_date, lo.pickup_time, lo.total_amount, lo.current_status "
-            "FROM freshwash.laundry_order lo "
-            "JOIN freshwash.member m ON lo.member_id = m.member_id "
-            "WHERE lo.order_id = %s",
+            f"SELECT lo.order_id, lo.member_id, m.name, m.email, m.contact_number, "
+            f"lo.order_date, lo.pickup_time, lo.total_amount, lo.current_status "
+            f"FROM {table_lo} lo "
+            f"JOIN freshwash.member m ON lo.member_id = m.member_id "
+            f"WHERE lo.order_id = %s",
             (order_id,)
         )
         row = cur.fetchone()
@@ -142,15 +159,22 @@ def update_order_status(order_id):
     conn = get_connection()
     cur = conn.cursor()
     try:
+        shard_id, member_id = locate_order_shard(cur, order_id)
+        if member_id is None:
+            return jsonify({"error": "Order not found"}), 404
+
+        table_lo = get_table('laundry_order', member_id)
+        table_osl = get_table('order_status_log', member_id)
+
         if 'status' in data and len(data.keys()) == 1:
             # Legacy client: status only
             new_status = data['status']
             cur.execute(
-                "UPDATE freshwash.laundry_order SET current_status = %s WHERE order_id = %s",
+                f"UPDATE {table_lo} SET current_status = %s WHERE order_id = %s",
                 (new_status, order_id),
             )
             cur.execute(
-                "INSERT INTO freshwash.order_status_log (order_id, status_name) VALUES (%s, %s)",
+                f"INSERT INTO {table_osl} (order_id, status_name) VALUES (%s, %s)",
                 (order_id, new_status),
             )
         else:
@@ -166,13 +190,13 @@ def update_order_status(order_id):
                 params.append(v)
             params.append(order_id)
             cur.execute(
-                f"UPDATE freshwash.laundry_order SET {', '.join(set_parts)} WHERE order_id = %s",
+                f"UPDATE {table_lo} SET {', '.join(set_parts)} WHERE order_id = %s",
                 tuple(params),
             )
 
             if 'current_status' in updates:
                 cur.execute(
-                    "INSERT INTO freshwash.order_status_log (order_id, status_name) VALUES (%s, %s)",
+                    f"INSERT INTO {table_osl} (order_id, status_name) VALUES (%s, %s)",
                     (order_id, updates['current_status']),
                 )
 
@@ -191,7 +215,12 @@ def delete_order(order_id):
     conn = get_connection()
     cur = conn.cursor()
     try:
-        cur.execute("DELETE FROM freshwash.laundry_order WHERE order_id = %s", (order_id,))
+        shard_id, member_id = locate_order_shard(cur, order_id)
+        if member_id is None:
+            return jsonify({"error": "Order not found"}), 404
+
+        table_lo = get_table('laundry_order', member_id)
+        cur.execute(f"DELETE FROM {table_lo} WHERE order_id = %s", (order_id,))
         if cur.rowcount == 0:
             return jsonify({"error": "Order not found"}), 404
         conn.commit()

@@ -1,5 +1,6 @@
 from flask import Blueprint, jsonify, request
 from db import get_connection
+from shard_router import N_SHARDS, get_table, locate_payment_shard
 
 payments_bp = Blueprint('admin_payments', __name__)
 
@@ -9,18 +10,26 @@ def get_all_payments():
     conn = get_connection()
     cur = conn.cursor()
     try:
-        cur.execute(
-            "SELECT p.payment_id, p.order_id, lo.member_id, m.name, p.payment_mode, "
-            "p.payment_amount, p.payment_date, ps.status_name "
-            "FROM freshwash.payment p "
-            "JOIN freshwash.laundry_order lo ON p.order_id = lo.order_id "
-            "JOIN freshwash.member m ON lo.member_id = m.member_id "
-            "LEFT JOIN freshwash.payment_status ps ON p.payment_id = ps.payment_id "
-            "ORDER BY p.payment_date DESC"
-        )
-        rows = cur.fetchall()
+        results = []
+        for shard_id in range(N_SHARDS):
+            table_p = f"freshwash.shard_{shard_id}_payment"
+            table_lo = f"freshwash.shard_{shard_id}_laundry_order"
+            table_ps = f"freshwash.shard_{shard_id}_payment_status"
+            
+            cur.execute(
+                f"SELECT p.payment_id, p.order_id, lo.member_id, m.name, p.payment_mode, "
+                f"p.payment_amount, p.payment_date, ps.status_name "
+                f"FROM {table_p} p "
+                f"JOIN {table_lo} lo ON p.order_id = lo.order_id "
+                f"JOIN freshwash.member m ON lo.member_id = m.member_id "
+                f"LEFT JOIN {table_ps} ps ON p.payment_id = ps.payment_id "
+            )
+            results.extend(cur.fetchall())
+            
+        results.sort(key=lambda r: r[6] if r[6] is not None else '1970-01-01', reverse=True)
+        
         payments = []
-        for r in rows:
+        for r in results:
             payments.append({
                 "payment_id": r[0],
                 "order_id": r[1],
@@ -44,14 +53,22 @@ def get_payment_details(payment_id):
     conn = get_connection()
     cur = conn.cursor()
     try:
+        shard_id, member_id = locate_payment_shard(cur, payment_id)
+        if member_id is None:
+            return jsonify({"error": "Payment not found"}), 404
+
+        table_p = get_table('payment', member_id)
+        table_lo = get_table('laundry_order', member_id)
+        table_ps = get_table('payment_status', member_id)
+
         cur.execute(
-            "SELECT p.payment_id, p.order_id, lo.member_id, m.name, m.email, m.contact_number, "
-            "p.payment_mode, p.payment_amount, p.payment_date, ps.status_name "
-            "FROM freshwash.payment p "
-            "JOIN freshwash.laundry_order lo ON p.order_id = lo.order_id "
-            "JOIN freshwash.member m ON lo.member_id = m.member_id "
-            "LEFT JOIN freshwash.payment_status ps ON p.payment_id = ps.payment_id "
-            "WHERE p.payment_id = %s",
+            f"SELECT p.payment_id, p.order_id, lo.member_id, m.name, m.email, m.contact_number, "
+            f"p.payment_mode, p.payment_amount, p.payment_date, ps.status_name "
+            f"FROM {table_p} p "
+            f"JOIN {table_lo} lo ON p.order_id = lo.order_id "
+            f"JOIN freshwash.member m ON lo.member_id = m.member_id "
+            f"LEFT JOIN {table_ps} ps ON p.payment_id = ps.payment_id "
+            f"WHERE p.payment_id = %s",
             (payment_id,)
         )
         row = cur.fetchone()
@@ -82,25 +99,25 @@ def update_payment_status(payment_id):
     conn = get_connection()
     cur = conn.cursor()
     try:
-        # Verify payment exists
-        cur.execute("SELECT payment_id FROM freshwash.payment WHERE payment_id = %s", (payment_id,))
-        if not cur.fetchone():
+        shard_id, member_id = locate_payment_shard(cur, payment_id)
+        if member_id is None:
             return jsonify({"error": "Payment not found"}), 404
-            
+
+        table_ps = get_table('payment_status', member_id)
         new_status = data.get('status', 'Pending')
         
         # Upsert payment status
-        cur.execute("SELECT payment_status_id FROM freshwash.payment_status WHERE payment_id = %s", (payment_id,))
+        cur.execute(f"SELECT payment_status_id FROM {table_ps} WHERE payment_id = %s", (payment_id,))
         existing_status = cur.fetchone()
         
         if existing_status:
             cur.execute(
-                "UPDATE freshwash.payment_status SET status_name = %s, status_timestamp = CURRENT_TIMESTAMP WHERE payment_id = %s",
+                f"UPDATE {table_ps} SET status_name = %s, status_timestamp = CURRENT_TIMESTAMP WHERE payment_id = %s",
                 (new_status, payment_id)
             )
         else:
             cur.execute(
-                "INSERT INTO freshwash.payment_status (payment_id, status_name) VALUES (%s, %s)",
+                f"INSERT INTO {table_ps} (payment_id, status_name) VALUES (%s, %s)",
                 (payment_id, new_status)
             )
             

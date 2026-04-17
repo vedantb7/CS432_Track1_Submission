@@ -1,6 +1,7 @@
 # employee/orders/routes.py
 from flask import Blueprint, jsonify, request
 from db import get_connection
+from shard_router import N_SHARDS, get_table, locate_order_shard
 from ..utils import (
     _safe_float, _isoformat, _frontend_status,
     DB_STATUSES, STATUS_TRANSITIONS, FRONTEND_TO_DB
@@ -8,17 +9,20 @@ from ..utils import (
 
 emp_orders_bp = Blueprint('emp_orders', __name__)
 
-def _order_belongs_to_employee(cur, order_id: int, employee_id: int) -> bool:
+def _order_belongs_to_employee(cur, order_id: int, employee_id: int, member_id: int) -> bool:
     """
     Authorization helper.
     Returns True iff the order's member is assigned to employee_id.
     """
+    table_lo = get_table('laundry_order', member_id)
+    table_oa = get_table('order_assignment', member_id)
+    
     cur.execute(
-        """
+        f"""
         SELECT 1
-        FROM freshwash.laundry_order lo
+        FROM {table_lo} lo
         JOIN freshwash.member m ON m.member_id = lo.member_id
-        LEFT JOIN freshwash.order_assignment oa ON oa.order_id = lo.order_id
+        LEFT JOIN {table_oa} oa ON oa.order_id = lo.order_id
         WHERE lo.order_id = %s AND (m.assigned_employee_id = %s OR oa.employee_id = %s)
         """,
         (order_id, employee_id, employee_id),
@@ -38,24 +42,34 @@ def get_assigned_orders(employee_id):
     conn = get_connection()
     cur  = conn.cursor()
     try:
-        cur.execute(
-            """
-            SELECT DISTINCT
-                lo.order_id, lo.member_id, m.name AS member_name,
-                lo.order_date, lo.pickup_time, lo.expected_delivery_time,
-                lo.total_amount, lo.current_status,
-                oa.assigned_role, oa.assigned_date
-            FROM freshwash.laundry_order lo
-            JOIN freshwash.member m ON m.member_id = lo.member_id
-            LEFT JOIN freshwash.order_assignment oa ON oa.order_id = lo.order_id
-            WHERE m.assigned_employee_id = %s OR oa.employee_id = %s
-            ORDER BY lo.order_date DESC
-            """,
-            (employee_id, employee_id)
-        )
-        rows = cur.fetchall()
+        # Scatter-Gather Pattern
+        results = []
+        for shard_id in range(N_SHARDS):
+            table_lo = f"freshwash.shard_{shard_id}_laundry_order"
+            table_oa = f"freshwash.shard_{shard_id}_order_assignment"
+            
+            cur.execute(
+                f"""
+                SELECT DISTINCT
+                    lo.order_id, lo.member_id, m.name AS member_name,
+                    lo.order_date, lo.pickup_time, lo.expected_delivery_time,
+                    lo.total_amount, lo.current_status,
+                    oa.assigned_role, oa.assigned_date
+                FROM {table_lo} lo
+                JOIN freshwash.member m ON m.member_id = lo.member_id
+                LEFT JOIN {table_oa} oa ON oa.order_id = lo.order_id
+                WHERE m.assigned_employee_id = %s OR oa.employee_id = %s
+                ORDER BY lo.order_date DESC
+                """,
+                (employee_id, employee_id)
+            )
+            results.extend(cur.fetchall())
+        
+        # Sort merged results by order_date DESC
+        results.sort(key=lambda r: r[3], reverse=True)
+        
         orders = []
-        for r in rows:
+        for r in results:
             db_status = r[7]
             orders.append({
                 "order_id":               r[0],
@@ -87,29 +101,33 @@ def get_order_details(order_id):
     conn = get_connection()
     cur = conn.cursor()
     try:
-        if not _order_belongs_to_employee(cur, order_id, employee_id):
+        shard_id, member_id = locate_order_shard(cur, order_id)
+        if member_id is None:
+            return jsonify({"error": "Order not found"}), 404
+
+        if not _order_belongs_to_employee(cur, order_id, employee_id, member_id):
             return jsonify({"error": "Forbidden"}), 403
 
+        table_lo = get_table('laundry_order', member_id)
         cur.execute(
-            """
+            f"""
             SELECT
                 lo.order_id, lo.member_id, m.name AS member_name,
                 lo.order_date, lo.pickup_time, lo.expected_delivery_time,
                 lo.total_amount, lo.current_status
-            FROM freshwash.laundry_order lo
+            FROM {table_lo} lo
             JOIN freshwash.member m ON m.member_id = lo.member_id
             WHERE lo.order_id = %s
             """,
             (order_id,),
         )
         r = cur.fetchone()
-        if not r:
-            return jsonify({"error": "Order not found"}), 404
 
         # Fetch items
-        cur.execute("""
+        table_os = get_table('order_service', member_id)
+        cur.execute(f"""
             SELECT s.service_name, ct.type_name, os.quantity, os.applied_price
-            FROM freshwash.order_service os
+            FROM {table_os} os
             JOIN freshwash.service s ON s.service_id = os.service_id
             JOIN freshwash.clothing_type ct ON ct.type_id = os.type_id
             WHERE os.order_id = %s
@@ -153,8 +171,9 @@ def create_order():
     conn = get_connection()
     cur  = conn.cursor()
     try:
+        member_id = int(data['member_id'])
         # Enforce: employees can only create/manage orders for their assigned members.
-        if not _member_assigned_to_employee(cur, int(data['member_id']), int(data['employee_id'])):
+        if not _member_assigned_to_employee(cur, member_id, int(data['employee_id'])):
             return jsonify({"error": "Forbidden: member not assigned to this employee"}), 403
 
         # Calculate total price and validate items
@@ -179,14 +198,21 @@ def create_order():
                 "applied_price": unit_price
             })
 
+        table_lo = get_table('laundry_order', member_id)
+        table_os = get_table('order_service', member_id)
+        table_oa = get_table('order_assignment', member_id)
+        table_osl = get_table('order_status_log', member_id)
+        table_p = get_table('payment', member_id)
+        table_ps = get_table('payment_status', member_id)
+
         cur.execute(
-            """
-            INSERT INTO freshwash.laundry_order
+            f"""
+            INSERT INTO {table_lo}
                 (member_id, pickup_time, expected_delivery_time, total_amount, current_status)
             VALUES (%s, %s, %s, %s, 'Pending')
             RETURNING order_id, order_date
             """,
-            (data['member_id'], data['pickup_time'],
+            (member_id, data['pickup_time'],
              data['expected_delivery_time'], total_amount)
         )
         order_row = cur.fetchone()
@@ -195,14 +221,14 @@ def create_order():
 
         # Insert items
         for item in items_to_insert:
-            cur.execute("""
-                INSERT INTO freshwash.order_service (order_id, service_id, type_id, quantity, applied_price)
+            cur.execute(f"""
+                INSERT INTO {table_os} (order_id, service_id, type_id, quantity, applied_price)
                 VALUES (%s, %s, %s, %s, %s)
             """, (order_id, item['service_id'], item['type_id'], item['quantity'], item['applied_price']))
 
         cur.execute(
-            """
-            INSERT INTO freshwash.order_assignment
+            f"""
+            INSERT INTO {table_oa}
                 (order_id, employee_id, assigned_role)
             VALUES (%s, %s, %s)
             """,
@@ -210,8 +236,8 @@ def create_order():
         )
 
         cur.execute(
-            """
-            INSERT INTO freshwash.order_status_log (order_id, status_name)
+            f"""
+            INSERT INTO {table_osl} (order_id, status_name)
             VALUES (%s, 'Pending')
             """,
             (order_id,)
@@ -219,15 +245,15 @@ def create_order():
 
         # 4. Create the payment record (default mode: Pending)
         cur.execute(
-            "INSERT INTO freshwash.payment (order_id, payment_mode, payment_amount, payment_date) "
-            "VALUES (%s, 'Pending', %s, CURRENT_TIMESTAMP) RETURNING payment_id",
+            f"INSERT INTO {table_p} (order_id, payment_mode, payment_amount, payment_date) "
+            f"VALUES (%s, 'Pending', %s, CURRENT_TIMESTAMP) RETURNING payment_id",
             (order_id, total_amount)
         )
         payment_id = cur.fetchone()[0]
         
         # 5. Create the payment status record
         cur.execute(
-            "INSERT INTO freshwash.payment_status (payment_id, status_name) VALUES (%s, 'Pending')",
+            f"INSERT INTO {table_ps} (payment_id, status_name) VALUES (%s, 'Pending')",
             (payment_id,)
         )
 
@@ -269,14 +295,18 @@ def update_order_status(order_id):
     conn = get_connection()
     cur  = conn.cursor()
     try:
-        if not _order_belongs_to_employee(cur, order_id, employee_id):
-            return jsonify({"error": "Forbidden"}), 403
-
-        cur.execute("SELECT current_status FROM freshwash.laundry_order WHERE order_id = %s", (order_id,))
-        row = cur.fetchone()
-        if not row:
+        shard_id, member_id = locate_order_shard(cur, order_id)
+        if member_id is None:
             return jsonify({"error": f"Order {order_id} not found"}), 404
 
+        if not _order_belongs_to_employee(cur, order_id, employee_id, member_id):
+            return jsonify({"error": "Forbidden"}), 403
+
+        table_lo = get_table('laundry_order', member_id)
+        table_osl = get_table('order_status_log', member_id)
+
+        cur.execute(f"SELECT current_status FROM {table_lo} WHERE order_id = %s", (order_id,))
+        row = cur.fetchone()
         current_db_status = row[0]
         if new_db_status == current_db_status:
             return jsonify({"message": "Order already has the requested status"}), 200
@@ -285,8 +315,8 @@ def update_order_status(order_id):
         if new_db_status not in allowed:
             return jsonify({"error": f"Cannot transition from '{current_db_status}' to '{new_db_status}'"}), 422
 
-        cur.execute("UPDATE freshwash.laundry_order SET current_status = %s WHERE order_id = %s", (new_db_status, order_id))
-        cur.execute("INSERT INTO freshwash.order_status_log (order_id, status_name) VALUES (%s, %s)", (order_id, new_db_status))
+        cur.execute(f"UPDATE {table_lo} SET current_status = %s WHERE order_id = %s", (new_db_status, order_id))
+        cur.execute(f"INSERT INTO {table_osl} (order_id, status_name) VALUES (%s, %s)", (order_id, new_db_status))
         conn.commit()
 
         return jsonify({
@@ -326,13 +356,19 @@ def verify_order(order_id):
     conn = get_connection()
     cur = conn.cursor()
     try:
-        if not _order_belongs_to_employee(cur, order_id, employee_id):
+        shard_id, member_id = locate_order_shard(cur, order_id)
+        if member_id is None:
+            return jsonify({"error": "Order not found"}), 404
+
+        if not _order_belongs_to_employee(cur, order_id, employee_id, member_id):
             return jsonify({"error": "Forbidden"}), 403
 
-        cur.execute("SELECT current_status FROM freshwash.laundry_order WHERE order_id = %s", (order_id,))
+        table_lo = get_table('laundry_order', member_id)
+        table_osl = get_table('order_status_log', member_id)
+        table_p = get_table('payment', member_id)
+
+        cur.execute(f"SELECT current_status FROM {table_lo} WHERE order_id = %s", (order_id,))
         row = cur.fetchone()
-        if not row:
-            return jsonify({"error": "Order not found"}), 404
         if row[0] != 'Awaiting Verification':
             return jsonify({"error": f"Order is not awaiting verification (current: {row[0]})"}), 422
 
@@ -343,28 +379,28 @@ def verify_order(order_id):
             final_price = data.get('final_price')
             if final_price is not None:
                 cur.execute(
-                    "UPDATE freshwash.laundry_order SET current_status = %s, expected_delivery_time = %s, total_amount = %s WHERE order_id = %s",
+                    f"UPDATE {table_lo} SET current_status = %s, expected_delivery_time = %s, total_amount = %s WHERE order_id = %s",
                     (new_status, data['expected_delivery_time'], final_price, order_id)
                 )
                 # Update payment amount if price adjusted
                 cur.execute(
-                    "UPDATE freshwash.payment SET payment_amount = %s WHERE order_id = %s",
+                    f"UPDATE {table_p} SET payment_amount = %s WHERE order_id = %s",
                     (final_price, order_id)
                 )
             else:
                 cur.execute(
-                    "UPDATE freshwash.laundry_order SET current_status = %s, expected_delivery_time = %s WHERE order_id = %s",
+                    f"UPDATE {table_lo} SET current_status = %s, expected_delivery_time = %s WHERE order_id = %s",
                     (new_status, data['expected_delivery_time'], order_id)
                 )
         else:
             # Reject
             cur.execute(
-                "UPDATE freshwash.laundry_order SET current_status = %s WHERE order_id = %s",
+                f"UPDATE {table_lo} SET current_status = %s WHERE order_id = %s",
                 (new_status, order_id)
             )
 
         cur.execute(
-            "INSERT INTO freshwash.order_status_log (order_id, status_name) VALUES (%s, %s)",
+            f"INSERT INTO {table_osl} (order_id, status_name) VALUES (%s, %s)",
             (order_id, new_status)
         )
 
@@ -406,9 +442,14 @@ def update_order(order_id):
     conn = get_connection()
     cur = conn.cursor()
     try:
-        if not _order_belongs_to_employee(cur, order_id, employee_id):
+        shard_id, member_id = locate_order_shard(cur, order_id)
+        if member_id is None:
+            return jsonify({"error": "Order not found"}), 404
+
+        if not _order_belongs_to_employee(cur, order_id, employee_id, member_id):
             return jsonify({"error": "Forbidden"}), 403
 
+        table_lo = get_table('laundry_order', member_id)
         set_parts = []
         params = []
         for k, v in updates.items():
@@ -417,7 +458,7 @@ def update_order(order_id):
         params.append(order_id)
 
         cur.execute(
-            f"UPDATE freshwash.laundry_order SET {', '.join(set_parts)} WHERE order_id = %s",
+            f"UPDATE {table_lo} SET {', '.join(set_parts)} WHERE order_id = %s",
             tuple(params),
         )
         conn.commit()
@@ -442,10 +483,15 @@ def delete_order(order_id):
     conn = get_connection()
     cur = conn.cursor()
     try:
-        if not _order_belongs_to_employee(cur, order_id, employee_id):
+        shard_id, member_id = locate_order_shard(cur, order_id)
+        if member_id is None:
+            return jsonify({"error": "Order not found"}), 404
+
+        if not _order_belongs_to_employee(cur, order_id, employee_id, member_id):
             return jsonify({"error": "Forbidden"}), 403
 
-        cur.execute("DELETE FROM freshwash.laundry_order WHERE order_id = %s", (order_id,))
+        table_lo = get_table('laundry_order', member_id)
+        cur.execute(f"DELETE FROM {table_lo} WHERE order_id = %s", (order_id,))
         if cur.rowcount == 0:
             return jsonify({"error": "Order not found"}), 404
         conn.commit()

@@ -10,13 +10,22 @@ A high-performance database indexing engine with full ACID transaction support a
 
 **Module A**: A high-performance B+ Tree database engine (C++) with full ACID compliance, crash recovery, and ~1700x faster lookups than brute force.
 
-**Module B**: A full-stack web application (Flask + React) with comprehensive concurrency testing: 100 threads, 10,000 operations, 994 ops/sec throughput, all ACID properties verified.
+**Module B (Assignment 3)**: A full-stack web application (Flask + React) with comprehensive concurrency testing: 100 threads, 10,000 operations, 994 ops/sec throughput, all ACID properties verified.
+
+**Module B (Assignment 4 - NEW ✨)**: Implementation of **Horizontal Database Sharding**. We physically partitioned 8 core tables into 3 shards each, utilizing a `member_id % 3` hashing strategy. A centralized router (`shard_router.py`) handles point lookups, while dynamic scatter-gather logic parallelizes complex multi-shard queries across User, Employee, and Admin endpoints. Zero cross-shard writes ensure strict isolation while providing horizontal scalability!
 
 ---
 
 ## ⚡ Quick Start
 
-### Test Everything (10 seconds)
+### Verify Horizontal Sharding & ACID (Assignment 4)
+```bash
+cd Module_B/
+bash VERIFY_COMPLETE.sh
+```
+*Note: This runs database checks, starts the Flask server, runs API validation, executes a Locust stress test (if installed), and generates a master evidence report.*
+
+### Test Module B Concurrency Only (10 seconds)
 ```bash
 cd Module_B/app/backend/
 python3 test_module_b_complete_v2.py  # 9/9 tests PASS
@@ -235,11 +244,21 @@ cd Module_B/app/backend/ && python3 bench_module_b.py
 - ✅ Full concurrency testing suite
 - ✅ Performance benchmarking tools
 
-### Dynamic Order System (New ✨)
+### Dynamic Order System
 - ✅ **Dynamic Itemized Selection**: Users select specific cloth types and services (e.g., Silk Saree + Dry Clean).
 - ✅ **Automated Pricing**: Real-time price calculation based on Admin-defined service/type matrices.
 - ✅ **Enhanced Verification Flow**: Employees review item detail, adjust final pricing, and must schedule delivery times during approval.
 - ✅ **Dual-mode Creation**: Both users and employees use the same itemized schema and validation logic.
+
+### Horizontal Database Sharding (Assignment 4)
+- ✅ **Physical Partitioning**: 8 core tables split into 3 isolated physical shard tables (e.g., `shard_0_laundry_order`, `shard_1_laundry_order`).
+- ✅ **Idempotent Data Migrations**: Initial migration scripts pre-check state explicitly using `SELECT 1` queries to safely prevent duplication faults on arbitrary system reboots.
+- ✅ **Deterministic Routing**: Custom `shard_router.py` hashes traffic dynamically using `member_id % N_SHARDS` without relying on randomized memory hashing.
+- ✅ **Data Locality**: Dependent tables (payments, lost items, services) strictly reside in the same shard as their parent order to eliminate cross-shard JOIN degradation.
+- ✅ **Strict Locate-Then-Mutate Logic**: Direct mutations without a `member_id` query an explicit global `locate_` function. Natively throwing `ValueError`s ensures zero accidental cross-shard corruption during data mutation.
+- ✅ **Scatter-Gather Parallelization**: Global APIs (like the Admin dashboard and cross-user list views) automatically aggregate shards via custom `scatter_gather` abstractions iteratively across all partitions.
+- ✅ **Data Protection**: Zero data loss during initialization, and legacy tables securely preserved using `_backup` suffixes blocking any active regression.
+- ✅ **Validation Guardrails**: Built-in verification scripts (`verify_sharding.py`) continuously monitor row parity and rigorously assert zero cross-shard overlaps.
 
 ---
 

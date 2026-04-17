@@ -1,3 +1,4 @@
+from shard_router import N_SHARDS
 import psycopg2
 import sys
 import os
@@ -81,6 +82,61 @@ def ensure_schema():
         has_idx = cur.fetchone() is not None
         if not has_idx:
             cur.execute("CREATE INDEX idx_member_assigned_employee_id ON freshwash.member (assigned_employee_id)")
+
+        # --- Sharding Implementation ---
+        # Check if already sharded by looking for laundry_order_backup
+        cur.execute(
+            """
+            SELECT 1
+            FROM information_schema.tables
+            WHERE table_schema = 'freshwash'
+              AND table_name = 'laundry_order_backup'
+            """
+        )
+        is_sharded = cur.fetchone() is not None
+
+        if not is_sharded:
+            tables_to_shard = [
+                'laundry_order', 'order_service', 'order_status_log', 
+                'order_assignment', 'payment', 'payment_status', 
+                'feedback', 'lost_item'
+            ]
+            
+            # 1. Create 3 physical shard tables for each table
+            for t in tables_to_shard:
+                for i in range(N_SHARDS):
+                    cur.execute(f"CREATE TABLE freshwash.shard_{i}_{t} (LIKE freshwash.{t} INCLUDING ALL)")
+            
+            # 2. Migrate existing data
+            for i in range(N_SHARDS):
+                # laundry_order
+                cur.execute(f"INSERT INTO freshwash.shard_{i}_laundry_order SELECT * FROM freshwash.laundry_order WHERE member_id % 3 = {i}")
+                
+                # order_service
+                cur.execute(f"INSERT INTO freshwash.shard_{i}_order_service SELECT os.* FROM freshwash.order_service os JOIN freshwash.laundry_order lo ON os.order_id = lo.order_id WHERE lo.member_id % 3 = {i}")
+
+                # order_status_log
+                cur.execute(f"INSERT INTO freshwash.shard_{i}_order_status_log SELECT osl.* FROM freshwash.order_status_log osl JOIN freshwash.laundry_order lo ON osl.order_id = lo.order_id WHERE lo.member_id % 3 = {i}")
+                
+                # order_assignment
+                cur.execute(f"INSERT INTO freshwash.shard_{i}_order_assignment SELECT oa.* FROM freshwash.order_assignment oa JOIN freshwash.laundry_order lo ON oa.order_id = lo.order_id WHERE lo.member_id % 3 = {i}")
+                
+                # payment
+                cur.execute(f"INSERT INTO freshwash.shard_{i}_payment SELECT p.* FROM freshwash.payment p JOIN freshwash.laundry_order lo ON p.order_id = lo.order_id WHERE lo.member_id % 3 = {i}")
+                
+                # payment_status
+                cur.execute(f"INSERT INTO freshwash.shard_{i}_payment_status SELECT ps.* FROM freshwash.payment_status ps JOIN freshwash.payment p ON ps.payment_id = p.payment_id JOIN freshwash.laundry_order lo ON p.order_id = lo.order_id WHERE lo.member_id % 3 = {i}")
+                
+                # feedback
+                cur.execute(f"INSERT INTO freshwash.shard_{i}_feedback SELECT f.* FROM freshwash.feedback f JOIN freshwash.laundry_order lo ON f.order_id = lo.order_id WHERE lo.member_id % 3 = {i}")
+                
+                # lost_item
+                cur.execute(f"INSERT INTO freshwash.shard_{i}_lost_item SELECT li.* FROM freshwash.lost_item li JOIN freshwash.laundry_order lo ON li.order_id = lo.order_id WHERE lo.member_id % 3 = {i}")
+
+            # 3. Rename original tables to *_backup to prevent accidental usage
+            # First, drop foreign keys that point to the original tables to avoid issues after renaming
+            for t in tables_to_shard:
+                cur.execute(f"ALTER TABLE freshwash.{t} RENAME TO {t}_backup")
 
         conn.commit()
     except Exception:

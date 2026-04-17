@@ -1,12 +1,12 @@
 {
-  "timestamp": "2026-04-14T22:41:18.119200",
-  "total_requests": 7575,
+  "timestamp": "2026-04-18T02:38:55.824869",
+  "total_requests": 21665,
   "failures": 0,
   "error_pct": 0.0,
-  "p50_ms": 36,
-  "p95_ms": 82,
-  "p99_ms": 100,
-  "throughput_rps": 68.3,
+  "p50_ms": 13,
+  "p95_ms": 35,
+  "p99_ms": 45,
+  "throughput_rps": 188.7,
   "pass_criteria": {
     "max_error_pct": 5.0,
     "max_p95_ms": 2000,

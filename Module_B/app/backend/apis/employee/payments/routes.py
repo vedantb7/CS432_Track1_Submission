@@ -1,6 +1,7 @@
 # employee/payments/routes.py
 from flask import Blueprint, jsonify, request
 from db import get_connection
+from shard_router import N_SHARDS, get_table, locate_payment_shard
 from ..utils import _safe_float, _isoformat
 
 emp_payments_bp = Blueprint('emp_payments', __name__)
@@ -11,24 +12,35 @@ def get_assigned_payments(employee_id):
     conn = get_connection()
     cur  = conn.cursor()
     try:
-        cur.execute(
-            """
-            SELECT DISTINCT
-                p.payment_id, p.order_id, p.payment_amount,
-                p.payment_mode, p.payment_date, ps.status_name AS payment_status
-            FROM freshwash.payment p
-            JOIN freshwash.laundry_order lo ON lo.order_id = p.order_id
-            JOIN freshwash.member m ON m.member_id = lo.member_id
-            LEFT JOIN freshwash.order_assignment oa ON oa.order_id = lo.order_id
-            LEFT JOIN freshwash.payment_status ps ON ps.payment_id = p.payment_id
-            WHERE m.assigned_employee_id = %s OR oa.employee_id = %s
-            ORDER BY p.payment_date DESC NULLS LAST
-            """,
-            (employee_id, employee_id)
-        )
-        rows = cur.fetchall()
+        # Scatter-Gather Pattern
+        results = []
+        for shard_id in range(N_SHARDS):
+            table_p = f"freshwash.shard_{shard_id}_payment"
+            table_lo = f"freshwash.shard_{shard_id}_laundry_order"
+            table_oa = f"freshwash.shard_{shard_id}_order_assignment"
+            table_ps = f"freshwash.shard_{shard_id}_payment_status"
+
+            cur.execute(
+                f"""
+                SELECT DISTINCT
+                    p.payment_id, p.order_id, p.payment_amount,
+                    p.payment_mode, p.payment_date, ps.status_name AS payment_status
+                FROM {table_p} p
+                JOIN {table_lo} lo ON lo.order_id = p.order_id
+                JOIN freshwash.member m ON m.member_id = lo.member_id
+                LEFT JOIN {table_oa} oa ON oa.order_id = lo.order_id
+                LEFT JOIN {table_ps} ps ON ps.payment_id = p.payment_id
+                WHERE m.assigned_employee_id = %s OR oa.employee_id = %s
+                """,
+                (employee_id, employee_id)
+            )
+            results.extend(cur.fetchall())
+            
+        # Sort merged results by payment_date DESC NULLS LAST
+        results.sort(key=lambda r: r[4] if r[4] is not None else '1970-01-01', reverse=True)
+        
         payments = []
-        for r in rows:
+        for r in results:
             payments.append({
                 "payment_id":     r[0],
                 "order_id":       r[1],
@@ -58,21 +70,24 @@ def update_payment_status(payment_id):
     conn = get_connection()
     cur  = conn.cursor()
     try:
-        cur.execute("SELECT payment_id FROM freshwash.payment WHERE payment_id = %s", (payment_id,))
-        if not cur.fetchone():
+        shard_id, member_id = locate_payment_shard(cur, payment_id)
+        if member_id is None:
             return jsonify({"error": f"Payment {payment_id} not found"}), 404
 
-        cur.execute("SELECT payment_status_id FROM freshwash.payment_status WHERE payment_id = %s", (payment_id,))
+        table_p = get_table('payment', member_id)
+        table_ps = get_table('payment_status', member_id)
+
+        cur.execute(f"SELECT payment_status_id FROM {table_ps} WHERE payment_id = %s", (payment_id,))
         existing = cur.fetchone()
 
         if existing:
             cur.execute(
-                "UPDATE freshwash.payment_status SET status_name = %s, status_timestamp = CURRENT_TIMESTAMP WHERE payment_id = %s",
+                f"UPDATE {table_ps} SET status_name = %s, status_timestamp = CURRENT_TIMESTAMP WHERE payment_id = %s",
                 (new_status, payment_id)
             )
         else:
             cur.execute(
-                "INSERT INTO freshwash.payment_status (payment_id, status_name) VALUES (%s, %s)",
+                f"INSERT INTO {table_ps} (payment_id, status_name) VALUES (%s, %s)",
                 (payment_id, new_status)
             )
         conn.commit()

@@ -1,6 +1,7 @@
 # user/orders/routes.py
 from flask import Blueprint, jsonify, request
 from db import get_connection
+from shard_router import get_table
 
 orders_bp = Blueprint('user_orders', __name__)
 
@@ -10,15 +11,17 @@ def get_user_orders(member_id):
     conn = get_connection()
     cur = conn.cursor()
     try:
-        cur.execute("""
+        table_lo = get_table('laundry_order', member_id)
+        table_oa = get_table('order_assignment', member_id)
+        cur.execute(f"""
             SELECT
                 lo.order_id, lo.order_date, lo.pickup_time,
                 lo.expected_delivery_time, lo.total_amount, lo.current_status,
                 e.employee_name AS handler_name,
                 or2.remarks AS rejection_remarks,
                 or2.rejected_at
-            FROM freshwash.laundry_order lo
-            LEFT JOIN freshwash.order_assignment oa
+            FROM {table_lo} lo
+            LEFT JOIN {table_oa} oa
                 ON oa.order_id = lo.order_id AND oa.assigned_role = 'Handler'
             LEFT JOIN freshwash.employee e ON e.employee_id = oa.employee_id
             LEFT JOIN LATERAL (
@@ -92,33 +95,41 @@ def create_user_order():
                 "applied_price": unit_price
             })
 
+        member_id = data['member_id']
+        table_lo = get_table('laundry_order', member_id)
+        table_os = get_table('order_service', member_id)
+        table_oa = get_table('order_assignment', member_id)
+        table_osl = get_table('order_status_log', member_id)
+        table_p = get_table('payment', member_id)
+        table_ps = get_table('payment_status', member_id)
+
         # Insert order (delivery date set to +48h as placeholder until verification)
-        cur.execute("""
-            INSERT INTO freshwash.laundry_order
+        cur.execute(f"""
+            INSERT INTO {table_lo}
                 (member_id, pickup_time, expected_delivery_time, total_amount, current_status)
             VALUES (%s, %s, %s::timestamp + interval '48 hours', %s, 'Awaiting Verification')
             RETURNING order_id, order_date
-        """, (data['member_id'], data['pickup_time'], data['pickup_time'], total_amount))
+        """, (member_id, data['pickup_time'], data['pickup_time'], total_amount))
         order_id, order_date = cur.fetchone()
 
         # Insert items
         for item in items_to_insert:
-            cur.execute("""
-                INSERT INTO freshwash.order_service (order_id, service_id, type_id, quantity, applied_price)
+            cur.execute(f"""
+                INSERT INTO {table_os} (order_id, service_id, type_id, quantity, applied_price)
                 VALUES (%s, %s, %s, %s, %s)
             """, (order_id, item['service_id'], item['type_id'], item['quantity'], item['applied_price']))
 
         # Assignment & Logs
-        cur.execute("INSERT INTO freshwash.order_assignment (order_id, employee_id, assigned_role) VALUES (%s, %s, 'Handler')", (order_id, employee_id))
-        cur.execute("INSERT INTO freshwash.order_status_log (order_id, status_name) VALUES (%s, 'Awaiting Verification')", (order_id,))
+        cur.execute(f"INSERT INTO {table_oa} (order_id, employee_id, assigned_role) VALUES (%s, %s, 'Handler')", (order_id, employee_id))
+        cur.execute(f"INSERT INTO {table_osl} (order_id, status_name) VALUES (%s, 'Awaiting Verification')", (order_id,))
 
         # Payment record
-        cur.execute("""
-            INSERT INTO freshwash.payment (order_id, payment_mode, payment_amount, payment_date)
+        cur.execute(f"""
+            INSERT INTO {table_p} (order_id, payment_mode, payment_amount, payment_date)
             VALUES (%s, 'Pending', %s, CURRENT_TIMESTAMP) RETURNING payment_id
         """, (order_id, total_amount))
         payment_id = cur.fetchone()[0]
-        cur.execute("INSERT INTO freshwash.payment_status (payment_id, status_name) VALUES (%s, 'Pending')", (payment_id,))
+        cur.execute(f"INSERT INTO {table_ps} (payment_id, status_name) VALUES (%s, 'Pending')", (payment_id,))
 
         conn.commit()
         return jsonify({
@@ -144,11 +155,15 @@ def resubmit_user_order(order_id):
     conn = get_connection()
     cur = conn.cursor()
     try:
+        member_id = data['member_id']
+        table_lo = get_table('laundry_order', member_id)
+        table_osl = get_table('order_status_log', member_id)
+
         # Ownership + status guard
-        cur.execute("""
-            SELECT current_status FROM freshwash.laundry_order
+        cur.execute(f"""
+            SELECT current_status FROM {table_lo}
             WHERE order_id = %s AND member_id = %s
-        """, (order_id, data['member_id']))
+        """, (order_id, member_id))
         row = cur.fetchone()
         if not row:
             return jsonify({"error": "Order not found or not yours"}), 404
@@ -163,17 +178,17 @@ def resubmit_user_order(order_id):
             params = list(updates.values())
             params.append(order_id)
             cur.execute(
-                f"UPDATE freshwash.laundry_order SET {', '.join(set_parts)} WHERE order_id = %s",
+                f"UPDATE {table_lo} SET {', '.join(set_parts)} WHERE order_id = %s",
                 tuple(params)
             )
 
         # Reset status
         cur.execute(
-            "UPDATE freshwash.laundry_order SET current_status = 'Awaiting Verification' WHERE order_id = %s",
+            f"UPDATE {table_lo} SET current_status = 'Awaiting Verification' WHERE order_id = %s",
             (order_id,)
         )
         cur.execute(
-            "INSERT INTO freshwash.order_status_log (order_id, status_name) VALUES (%s, 'Awaiting Verification')",
+            f"INSERT INTO {table_osl} (order_id, status_name) VALUES (%s, 'Awaiting Verification')",
             (order_id,)
         )
 
