@@ -235,6 +235,12 @@ cd Module_B/app/backend/ && python3 bench_module_b.py
 - ✅ Full concurrency testing suite
 - ✅ Performance benchmarking tools
 
+### Dynamic Order System (New ✨)
+- ✅ **Dynamic Itemized Selection**: Users select specific cloth types and services (e.g., Silk Saree + Dry Clean).
+- ✅ **Automated Pricing**: Real-time price calculation based on Admin-defined service/type matrices.
+- ✅ **Enhanced Verification Flow**: Employees review item detail, adjust final pricing, and must schedule delivery times during approval.
+- ✅ **Dual-mode Creation**: Both users and employees use the same itemized schema and validation logic.
+
 ---
 
 ## 📚 For More Details

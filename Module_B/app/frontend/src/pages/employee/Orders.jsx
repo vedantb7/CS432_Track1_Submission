@@ -1,12 +1,14 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Search, Plus, Edit2 } from 'lucide-react';
 import { useToast } from '../../components/Toast';
 import {
   getAssignedOrders,
   getAssignedMembers,
   createOrder,
   updateOrderStatus,
+  verifyOrder,
 } from '../../utils/employeeApi';
+import { Check, X, AlertCircle, Search, Plus, Edit2, Package } from 'lucide-react';
+import OrderItemsForm from '../../components/OrderItemsForm';
 import '../../styles/admin.css';
 
 // DB lifecycle statuses shown in the manage modal dropdown
@@ -39,13 +41,19 @@ const EmployeeOrders = () => {
     member_id: '',
     pickup_time: '',
     expected_delivery_time: '',
-    total_amount: '',
+    items: [],
+    total_amount: 0,
   });
   const [addingOrder, setAddingOrder] = useState(false);
   const [manageOrder, setManageOrder] = useState(null);
   const [newStatus, setNewStatus] = useState('');
   const [showManageModal, setShowManageModal] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [verificationRemarks, setVerificationRemarks] = useState('');
+  const [verificationPrice, setVerificationPrice] = useState('');
+  const [verificationDelivery, setVerificationDelivery] = useState('');
+  const [verifying, setVerifying] = useState(false);
+  const [orderDetailLoading, setOrderDetailLoading] = useState(false);
 
   const addToast = useToast();
 
@@ -67,7 +75,11 @@ const EmployeeOrders = () => {
     }
   };
 
-  useEffect(() => { loadData(); }, [currentEmployee]);
+  useEffect(() => {
+    loadData();
+    const interval = setInterval(loadData, 15000); // Polling every 15s
+    return () => clearInterval(interval);
+  }, [currentEmployee]);
 
   // ── Filter (search uses String() because IDs are numbers) ───────────────
   const filteredOrders = orders.filter((order) => {
@@ -81,17 +93,22 @@ const EmployeeOrders = () => {
     return matchesSearch && matchesStatus;
   });
 
-  const getStatusBadgeClass = (status) => `badge ${status}`;
+  const getStatusBadgeClass = (status) => {
+    const s = status || 'pending';
+    return `badge ${s.replace(' ', '_')}`;
+  };
 
-  // Counts per frontend bucket for filter buttons
-  const countByBucket = (bucket) =>
-    orders.filter((o) => o.order_status === bucket).length;
+  // Counts for filter buttons (use DB status for exact match)
+  const countAwaiting = orders.filter((o) => o.db_status === 'Awaiting Verification').length;
+  const countPending = orders.filter((o) => o.db_status === 'Pending').length;
+  const countProcessing = orders.filter((o) => (o.db_status || '').includes('processing') || ['Picked Up', 'Washing', 'Ironing'].includes(o.db_status)).length;
+  const countCompleted = orders.filter((o) => o.db_status === 'Completed' || o.db_status === 'Delivered').length;
 
   // ── Add Order ────────────────────────────────────────────────────────────
   const handleAddOrder = async () => {
-    const { member_id, pickup_time, expected_delivery_time, total_amount } = newOrderData;
-    if (!member_id || !pickup_time || !expected_delivery_time || !total_amount) {
-      addToast('Please fill all fields', 'error');
+    const { member_id, pickup_time, expected_delivery_time, items, total_amount } = newOrderData;
+    if (!member_id || !pickup_time || !expected_delivery_time || !items.length) {
+      addToast('Please select member, times and at least one item', 'error');
       return;
     }
     if (new Date(expected_delivery_time) <= new Date(pickup_time)) {
@@ -104,13 +121,13 @@ const EmployeeOrders = () => {
         member_id: parseInt(member_id),
         pickup_time,
         expected_delivery_time,
-        total_amount: parseFloat(total_amount),
+        items,
         employee_id: currentEmployee,
         assigned_role: 'Handler',
       });
-      addToast('Order created and assigned successfully!', 'success');
+      addToast('Order created successfully!', 'success');
       setShowAddOrderModal(false);
-      setNewOrderData({ member_id: '', pickup_time: '', expected_delivery_time: '', total_amount: '' });
+      setNewOrderData({ member_id: '', pickup_time: '', expected_delivery_time: '', items: [], total_amount: 0 });
       loadData();
     } catch (err) {
       addToast(err.message || 'Failed to add order', 'error');
@@ -119,11 +136,32 @@ const EmployeeOrders = () => {
     }
   };
 
-  const handleManageClick = (order) => {
+  const [detailedOrder, setDetailedOrder] = useState(null);
+
+  const handleManageClick = async (order) => {
     setManageOrder(order);
-    // Pre-populate with the raw DB status so the dropdown shows the real current state
+    setDetailedOrder(null);
     setNewStatus(order.db_status || 'Pending');
     setShowManageModal(true);
+    
+    // For awaiting verification, fetch the items user entered
+    if (order.db_status === 'Awaiting Verification') {
+      setOrderDetailLoading(true);
+      try {
+        const res = await fetch(`${window.location.origin}/api/employee/orders/order/${order.order_id}?employee_id=${currentEmployee}`);
+        const data = await res.json();
+        setDetailedOrder(data);
+        setVerificationPrice(data.total_amount);
+        // Default delivery time to +2 days from now if not set
+        const defaultDelivery = new Date();
+        defaultDelivery.setDate(defaultDelivery.getDate() + 2);
+        setVerificationDelivery(defaultDelivery.toISOString().slice(0, 16));
+      } catch (err) {
+        addToast('Failed to load order details', 'error');
+      } finally {
+        setOrderDetailLoading(false);
+      }
+    }
   };
 
   // ── Update Status ─────────────────────────────────────────────────────────
@@ -142,6 +180,43 @@ const EmployeeOrders = () => {
       addToast(err.message || 'Failed to update status', 'error');
     } finally {
       setUpdatingStatus(false);
+    }
+  };
+
+  // ── Verify Order (Approve/Reject) ─────────────────────────────────────────
+  const handleVerifyOrder = async (action) => {
+    if (!manageOrder) return;
+    if (action === 'reject' && !verificationRemarks.trim()) {
+      addToast('Please provide rejection remarks', 'error');
+      return;
+    }
+    if (action === 'approve' && (!verificationDelivery || !verificationPrice)) {
+      addToast('Please provide delivery time and confirm price', 'error');
+      return;
+    }
+    setVerifying(true);
+    try {
+      await verifyOrder(
+        manageOrder.order_id, 
+        action, 
+        verificationRemarks, 
+        action === 'approve' ? parseFloat(verificationPrice) : null,
+        action === 'approve' ? verificationDelivery : null
+      );
+      addToast(
+        `Order ${action === 'approve' ? 'approved' : 'rejected'} successfully`,
+        'success'
+      );
+      setShowManageModal(false);
+      setManageOrder(null);
+      setVerificationRemarks('');
+      setVerificationPrice('');
+      setVerificationDelivery('');
+      loadData();
+    } catch (err) {
+      addToast(err.message || 'Failed to verify order', 'error');
+    } finally {
+      setVerifying(false);
     }
   };
 
@@ -168,25 +243,25 @@ const EmployeeOrders = () => {
           <span className="stat-label">Orders</span>
         </div>
         <div className="stat-box">
+          <h3>Verification</h3>
+          <p className="stat-value" style={{ color: '#92400e' }}>
+            {countAwaiting}
+          </p>
+          <span className="stat-label">Pending Approval</span>
+        </div>
+        <div className="stat-box">
           <h3>Pending</h3>
           <p className="stat-value" style={{ color: '#f59e0b' }}>
-            {countByBucket('pending')}
+            {countPending}
           </p>
           <span className="stat-label">Action Needed</span>
         </div>
         <div className="stat-box">
           <h3>In Progress</h3>
           <p className="stat-value" style={{ color: '#3b82f6' }}>
-            {countByBucket('processing')}
+            {countProcessing}
           </p>
           <span className="stat-label">Being Handled</span>
-        </div>
-        <div className="stat-box">
-          <h3>Delivered</h3>
-          <p className="stat-value" style={{ color: '#10b981' }}>
-            {countByBucket('completed')}
-          </p>
-          <span className="stat-label">Done</span>
         </div>
       </div>
 
@@ -201,12 +276,13 @@ const EmployeeOrders = () => {
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
-        <div className="filter-buttons">
+        <div className="filter-buttons" style={{ flexWrap: 'wrap', gap: '8px' }}>
           {[
             { label: `All (${orders.length})`, value: 'all' },
-            { label: `Pending (${countByBucket('pending')})`, value: 'pending' },
-            { label: `Processing (${countByBucket('processing')})`, value: 'processing' },
-            { label: `Delivered (${countByBucket('completed')})`, value: 'completed' },
+            { label: `Awaiting (${countAwaiting})`, value: 'awaiting' },
+            { label: `Pending (${countPending})`, value: 'pending' },
+            { label: `Processing (${countProcessing})`, value: 'processing' },
+            { label: `Delivered (${countCompleted})`, value: 'completed' },
           ].map(({ label, value }) => (
             <button
               key={value}
@@ -262,8 +338,7 @@ const EmployeeOrders = () => {
                       <td>
                         {/* Badge class uses frontend bucket; show DB status as tooltip */}
                         <span
-                          className={getStatusBadgeClass(order.order_status)}
-                          title={order.db_status}
+                          className={getStatusBadgeClass(order.db_status)}
                         >
                           {order.db_status}
                         </span>
@@ -321,43 +396,116 @@ const EmployeeOrders = () => {
                   <label>Current Status</label>
                   <p>
                     <span
-                      className={getStatusBadgeClass(manageOrder.order_status)}
+                      className={getStatusBadgeClass(manageOrder.db_status)}
                     >
                       {manageOrder.db_status}
                     </span>
                   </p>
                 </div>
-                <div className="detail-item full-width">
-                  <label htmlFor="status-select">New Status *</label>
-                  <select
-                    id="status-select"
-                    className="form-select"
-                    value={newStatus}
-                    onChange={(e) => setNewStatus(e.target.value)}
-                  >
-                    {ORDER_STATUSES.map(({ label, value }) => (
-                      <option key={value} value={value}>{label}</option>
-                    ))}
-                  </select>
-                  <p style={{ fontSize: '0.8rem', color: '#6b7280', marginTop: 4 }}>
-                    Backend validates valid transitions — invalid moves will return an error.
-                  </p>
-                </div>
-              </div>
-              <div className="modal-footer">
-                <button
-                  className="btn btn-secondary"
-                  onClick={() => setShowManageModal(false)}
-                >
-                  Cancel
-                </button>
-                <button
-                  className="btn btn-primary"
-                  onClick={handleUpdateStatus}
-                  disabled={!newStatus || updatingStatus}
-                >
-                  {updatingStatus ? 'Updating…' : 'Update Status'}
-                </button>
+
+                {manageOrder.db_status === 'Awaiting Verification' ? (
+                  <div className="detail-item full-width verification-section">
+                    {orderDetailLoading ? (
+                      <p>Loading user items...</p>
+                    ) : detailedOrder ? (
+                      <>
+                        <div className="user-items-review" style={{ background: '#f9fafb', padding: '12px', borderRadius: '8px', marginBottom: '1.5rem' }}>
+                          <h4 style={{ margin: '0 0 8px 0', fontSize: '0.9rem' }}>User Selected Items</h4>
+                          <div style={{ display: 'grid', gap: '8px' }}>
+                            {detailedOrder.items?.map((it, idx) => (
+                              <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+                                <span>{it.quantity}x {it.type_name} ({it.service_name})</span>
+                                <span style={{ fontWeight: 600 }}>₹{(it.quantity * it.applied_price).toFixed(2)}</span>
+                              </div>
+                            ))}
+                          </div>
+                          <div style={{ borderTop: '1px solid #e5e7eb', marginTop: '8px', paddingTop: '8px', textAlign: 'right', fontWeight: 700 }}>
+                            Total: ₹{detailedOrder.total_amount.toFixed(2)}
+                          </div>
+                        </div>
+
+                        <div className="verification-inputs" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                          <div className="form-group">
+                            <label style={{ fontSize: '0.85rem', fontWeight: 600 }}>Confirmed Total Price (₹)</label>
+                            <input 
+                              type="number" 
+                              className="form-select" 
+                              value={verificationPrice} 
+                              onChange={(e) => setVerificationPrice(e.target.value)} 
+                            />
+                          </div>
+                          <div className="form-group">
+                            <label style={{ fontSize: '0.85rem', fontWeight: 600 }}>Expected Delivery</label>
+                            <input 
+                              type="datetime-local" 
+                              className="form-select" 
+                              value={verificationDelivery} 
+                              onChange={(e) => setVerificationDelivery(e.target.value)} 
+                            />
+                          </div>
+                        </div>
+
+                        <div className="rejection-box" style={{ marginTop: '1rem' }}>
+                          <label htmlFor="rejection-remarks">Rejection Remarks (Required for rejection)</label>
+                          <textarea
+                            id="rejection-remarks"
+                            className="form-textarea"
+                            placeholder="Reason for rejection..."
+                            value={verificationRemarks}
+                            onChange={(e) => setVerificationRemarks(e.target.value)}
+                            style={{ width: '100%', minHeight: '60px', marginTop: '4px', borderRadius: '8px', padding: '10px', border: '1px solid #e5e7eb' }}
+                          />
+                        </div>
+
+                        <div className="verification-actions" style={{ display: 'flex', gap: '12px', marginTop: '1.5rem' }}>
+                          <button
+                            className="btn btn-primary"
+                            onClick={() => handleVerifyOrder('approve')}
+                            disabled={verifying}
+                            style={{ flex: 1, background: '#10b981' }}
+                          >
+                            <Check size={18} style={{ marginRight: '8px' }} /> Approve
+                          </button>
+                          <button
+                            className="btn"
+                            onClick={() => handleVerifyOrder('reject')}
+                            disabled={verifying}
+                            style={{ flex: 1, background: '#ef4444', color: 'white' }}
+                          >
+                            <X size={18} style={{ marginRight: '8px' }} /> Reject
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <p>Error loading items.</p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="detail-item full-width">
+                    <label htmlFor="status-select">Update Lifecycle Status</label>
+                    <select
+                      id="status-select"
+                      className="form-select"
+                      value={newStatus}
+                      onChange={(e) => setNewStatus(e.target.value)}
+                    >
+                      <option value="">— Select New Status —</option>
+                      {ORDER_STATUSES.map(({ label, value }) => (
+                        <option key={value} value={value}>{label}</option>
+                      ))}
+                    </select>
+                    <div className="modal-footer" style={{ border: 'none', padding: 0 }}>
+                      <button
+                        className="btn btn-primary"
+                        onClick={handleUpdateStatus}
+                        disabled={!newStatus || updatingStatus}
+                        style={{ width: '100%' }}
+                      >
+                        {updatingStatus ? 'Updating…' : 'Update Status'}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -427,20 +575,10 @@ const EmployeeOrders = () => {
                   />
                 </div>
 
-                {/* Total amount */}
-                <div className="detail-item">
-                  <label htmlFor="total-amount">Total Amount (₹) *</label>
-                  <input
-                    id="total-amount"
-                    type="number"
-                    className="form-select"
-                    placeholder="e.g. 500.00"
-                    value={newOrderData.total_amount}
-                    onChange={(e) =>
-                      setNewOrderData({ ...newOrderData, total_amount: e.target.value })
-                    }
-                    step="0.01"
-                    min="0.01"
+                {/* Order Items */}
+                <div className="detail-item full-width">
+                  <OrderItemsForm 
+                    onChange={(items, total) => setNewOrderData({ ...newOrderData, items, total_amount: total })} 
                   />
                 </div>
               </div>
@@ -511,6 +649,8 @@ const EmployeeOrders = () => {
         .edit-btn:hover { background: #fde047; }
         .edit-btn.icon-only { padding: 8px; }
         .amount-highlight { color: #059669; font-weight: 700; }
+        .badge.awaiting_verification { background: #fef3c7; color: #92400e; }
+        .badge.rejected { background: #fee2e2; color: #991b1b; }
         .badge.cancelled { background: #fee2e2; color: #dc2626; }
       `}</style>
     </div>

@@ -1,35 +1,58 @@
+# Dependency directories
+node_modules/
+jspm_packages/
+.venv/
+env/
+venv/
+ENV/
+
+# Build outputs
+dist/
+build/
+*.so
+bin/
+obj/
 
 # Python
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.tox/
+.nox/
+.coverage
+htmlcov/
+nosetests.xml
+coverage.xml
 
-# C++ build outputs
-*.so
+# Logs
+*.log
+flask_server.log
+locust.log
+module_b_*.log
 
-# Bench output
-Module_A/database/benchmark_results.csv
-
-# Module B generated test artifacts and logs
-Module_B/app/backend/__pycache__/
-Module_B/app/backend/*.log
+# Databases & Data
+*.sqlite
+*.db
+test_results.json
 Module_B/app/backend/acid_*.json
-Module_B/app/backend/acid_*.log
 Module_B/app/backend/locust_*.csv
 Module_B/app/backend/locust_*.json
-Module_B/app/backend/locust.log
-Module_B/app/backend/final_evidence_report.md
-Module_B/app/backend/module_b_evidence.md
+
+# IDEs/Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Reports & Evidence (Generated)
+module_b_evidence.md
+final_evidence_report.md
 Module_B/app/backend/all_results.json
 Module_B/app/backend/benchmark_results.csv
 Module_B/app/backend/*.png
-Module_B/app/backend/.ipynb_checkpoints/
 
-# Python
-__pycache__/
-*.pyc
-
-# C++ build outputs
-*.so
-
-# Bench output
-Module_A/database/benchmark_results.csv
+# Checkpoints
+.ipynb_checkpoints/

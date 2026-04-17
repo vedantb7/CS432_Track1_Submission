@@ -106,6 +106,23 @@ def get_order_details(order_id):
         if not r:
             return jsonify({"error": "Order not found"}), 404
 
+        # Fetch items
+        cur.execute("""
+            SELECT s.service_name, ct.type_name, os.quantity, os.applied_price
+            FROM freshwash.order_service os
+            JOIN freshwash.service s ON s.service_id = os.service_id
+            JOIN freshwash.clothing_type ct ON ct.type_id = os.type_id
+            WHERE os.order_id = %s
+        """, (order_id,))
+        items = []
+        for item_row in cur.fetchall():
+            items.append({
+                "service_name": item_row[0],
+                "type_name": item_row[1],
+                "quantity": item_row[2],
+                "applied_price": float(item_row[3])
+            })
+
         db_status = r[7]
         return jsonify({
             "order_id":               r[0],
@@ -117,6 +134,7 @@ def get_order_details(order_id):
             "total_amount":           _safe_float(r[6]),
             "order_status":           _frontend_status(db_status),
             "db_status":              db_status,
+            "items":                  items
         }), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -126,16 +144,10 @@ def get_order_details(order_id):
 
 @emp_orders_bp.route('', methods=['POST'])
 def create_order():
-    """Create a new laundry order and immediately assign it to the employee."""
+    """Create a new itemized laundry order and immediately assign it to the employee."""
     data = request.get_json(silent=True)
-    if not data:
-        return jsonify({"error": "Request body is required"}), 400
-
-    required = ('member_id', 'pickup_time', 'expected_delivery_time',
-                'total_amount', 'employee_id')
-    missing = [f for f in required if not data.get(f)]
-    if missing:
-        return jsonify({"error": f"Missing required fields: {', '.join(missing)}"}), 400
+    if not data or 'items' not in data or 'member_id' not in data or 'employee_id' not in data:
+        return jsonify({"error": "member_id, employee_id and items array required"}), 400
 
     assigned_role = data.get('assigned_role', 'Handler')
     conn = get_connection()
@@ -145,6 +157,28 @@ def create_order():
         if not _member_assigned_to_employee(cur, int(data['member_id']), int(data['employee_id'])):
             return jsonify({"error": "Forbidden: member not assigned to this employee"}), 403
 
+        # Calculate total price and validate items
+        total_amount = 0
+        items_to_insert = []
+        for item in data['items']:
+            cur.execute(
+                "SELECT price FROM freshwash.price WHERE type_id = %s AND service_id = %s",
+                (item['type_id'], item['service_id'])
+            )
+            price_row = cur.fetchone()
+            if not price_row:
+                return jsonify({"error": f"Invalid pricing rule for type {item['type_id']} and service {item['service_id']}"}), 400
+            
+            unit_price = float(price_row[0])
+            qty = int(item['quantity'])
+            total_amount += unit_price * qty
+            items_to_insert.append({
+                "service_id": item['service_id'],
+                "type_id": item['type_id'],
+                "quantity": qty,
+                "applied_price": unit_price
+            })
+
         cur.execute(
             """
             INSERT INTO freshwash.laundry_order
@@ -153,11 +187,18 @@ def create_order():
             RETURNING order_id, order_date
             """,
             (data['member_id'], data['pickup_time'],
-             data['expected_delivery_time'], data['total_amount'])
+             data['expected_delivery_time'], total_amount)
         )
         order_row = cur.fetchone()
         order_id  = order_row[0]
         order_date = order_row[1]
+
+        # Insert items
+        for item in items_to_insert:
+            cur.execute("""
+                INSERT INTO freshwash.order_service (order_id, service_id, type_id, quantity, applied_price)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (order_id, item['service_id'], item['type_id'], item['quantity'], item['applied_price']))
 
         cur.execute(
             """
@@ -180,7 +221,7 @@ def create_order():
         cur.execute(
             "INSERT INTO freshwash.payment (order_id, payment_mode, payment_amount, payment_date) "
             "VALUES (%s, 'Pending', %s, CURRENT_TIMESTAMP) RETURNING payment_id",
-            (order_id, data['total_amount'])
+            (order_id, total_amount)
         )
         payment_id = cur.fetchone()[0]
         
@@ -194,6 +235,7 @@ def create_order():
         return jsonify({
             "message":    "Order created and assigned successfully",
             "order_id":   order_id,
+            "total_amount": total_amount,
             "order_date": _isoformat(order_date),
             "payment_id": payment_id
         }), 201
@@ -253,6 +295,90 @@ def update_order_status(order_id):
             "previous_status":  _frontend_status(current_db_status),
             "new_status":       _frontend_status(new_db_status),
             "db_status":        new_db_status
+        }), 200
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+@emp_orders_bp.route('/<int:order_id>/verify', methods=['PUT'])
+def verify_order(order_id):
+    """Employee approves or rejects a user-submitted order."""
+    data = request.get_json(silent=True)
+    if not data or 'employee_id' not in data or 'action' not in data:
+        return jsonify({"error": "'employee_id' and 'action' required"}), 400
+
+    action = data['action'].lower()   # 'approve' or 'reject'
+    if action not in ('approve', 'reject'):
+        return jsonify({"error": "action must be 'approve' or 'reject'"}), 400
+    if action == 'reject' and not data.get('remarks', '').strip():
+        return jsonify({"error": "remarks required when rejecting"}), 400
+    if action == 'approve' and not data.get('expected_delivery_time'):
+        return jsonify({"error": "expected_delivery_time required when approving"}), 400
+
+    try:
+        employee_id = int(data['employee_id'])
+    except Exception:
+        return jsonify({"error": "employee_id must be integer"}), 400
+
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        if not _order_belongs_to_employee(cur, order_id, employee_id):
+            return jsonify({"error": "Forbidden"}), 403
+
+        cur.execute("SELECT current_status FROM freshwash.laundry_order WHERE order_id = %s", (order_id,))
+        row = cur.fetchone()
+        if not row:
+            return jsonify({"error": "Order not found"}), 404
+        if row[0] != 'Awaiting Verification':
+            return jsonify({"error": f"Order is not awaiting verification (current: {row[0]})"}), 422
+
+        new_status = 'Pending' if action == 'approve' else 'Rejected'
+
+        if action == 'approve':
+            # Update delivery time and optionally final price
+            final_price = data.get('final_price')
+            if final_price is not None:
+                cur.execute(
+                    "UPDATE freshwash.laundry_order SET current_status = %s, expected_delivery_time = %s, total_amount = %s WHERE order_id = %s",
+                    (new_status, data['expected_delivery_time'], final_price, order_id)
+                )
+                # Update payment amount if price adjusted
+                cur.execute(
+                    "UPDATE freshwash.payment SET payment_amount = %s WHERE order_id = %s",
+                    (final_price, order_id)
+                )
+            else:
+                cur.execute(
+                    "UPDATE freshwash.laundry_order SET current_status = %s, expected_delivery_time = %s WHERE order_id = %s",
+                    (new_status, data['expected_delivery_time'], order_id)
+                )
+        else:
+            # Reject
+            cur.execute(
+                "UPDATE freshwash.laundry_order SET current_status = %s WHERE order_id = %s",
+                (new_status, order_id)
+            )
+
+        cur.execute(
+            "INSERT INTO freshwash.order_status_log (order_id, status_name) VALUES (%s, %s)",
+            (order_id, new_status)
+        )
+
+        if action == 'reject':
+            cur.execute("""
+                INSERT INTO freshwash.order_rejection (order_id, employee_id, remarks)
+                VALUES (%s, %s, %s)
+            """, (order_id, employee_id, data['remarks'].strip()))
+
+        conn.commit()
+        return jsonify({
+            "message": f"Order {'approved' if action == 'approve' else 'rejected'}",
+            "order_id": order_id,
+            "new_status": new_status
         }), 200
     except Exception as e:
         conn.rollback()

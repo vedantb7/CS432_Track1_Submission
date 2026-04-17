@@ -1,9 +1,4 @@
-# FreshWash Frontend Requirements
-react >= 19.0.0
-react-dom >= 19.0.0
-vite >= 6.0.0
-react-router-dom >= 6.0.0      # Routing & Navigation
-lucide-react >= 0.400.0        # Icon Library
+# FreshWash Backend Requirements
 psycopg2
 flask
 flask-cors
@@ -13,3 +8,5 @@ pandas
 matplotlib
 numpy
 graphviz
+requests
+jupyter

@@ -39,5 +39,8 @@ def get_all_lost_items_range(start_id, end_id):
     """Demonstrates range query capability of the B+ Tree integration."""
     return lost_items_tree.range_query(start_id, end_id)
 
-# Initialize the cache on module load
-refresh_lost_items_cache()
+# Initialize the cache on module load — fail gracefully if DB is unavailable
+try:
+    refresh_lost_items_cache()
+except Exception as e:
+    print(f"Warning: Could not sync B+ Tree cache on startup (DB unavailable?): {e}")

@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-04-05T16:58:07.249318",
+  "timestamp": "2026-04-14T22:35:58.495748",
   "summary": {
     "total": 10,
     "passed": 10,
@@ -10,72 +10,72 @@
     {
       "test": "A1_ATOMICITY_CONCURRENT_INSERTS",
       "status": "PASS",
-      "duration": 0.108601,
-      "timestamp": "2026-04-05T16:57:59.535705",
+      "duration": 0.06262,
+      "timestamp": "2026-04-14T22:35:55.421300",
       "details": "All 50 inserts committed atomically (count=50)"
     },
     {
       "test": "A2_ATOMICITY_ROLLBACK_LEAVES_NO_TRACE",
       "status": "PASS",
-      "duration": 0.012457,
-      "timestamp": "2026-04-05T16:57:59.548507",
+      "duration": 0.00539,
+      "timestamp": "2026-04-14T22:35:55.427006",
       "details": "Rollback removed all dirty writes; only baseline survives (count=1)"
     },
     {
       "test": "A3_ATOMICITY_MULTI_TABLE",
       "status": "PASS",
-      "duration": 0.010905,
-      "timestamp": "2026-04-05T16:57:59.559684",
+      "duration": 0.00522,
+      "timestamp": "2026-04-14T22:35:55.432555",
       "details": "All 3 tables updated: Users=1, Products=1, Orders=1"
     },
     {
       "test": "C1_CONSISTENCY_NEGATIVE_BALANCE_REJECTED",
       "status": "PASS",
-      "duration": 0.01044,
-      "timestamp": "2026-04-05T16:57:59.570621",
+      "duration": 0.005312,
+      "timestamp": "2026-04-14T22:35:55.438541",
       "details": "Negative balance rejected by txn_update; rollback restored state"
     },
     {
       "test": "I1_ISOLATION_CONCURRENT_UPDATES",
       "status": "PASS",
-      "duration": 0.18995,
-      "timestamp": "2026-04-05T16:57:59.760996",
+      "duration": 0.072544,
+      "timestamp": "2026-04-14T22:35:55.511622",
       "details": "All 20 concurrent updates completed without interference"
     },
     {
       "test": "I2_ISOLATION_RACE_CONDITION_SAME_KEY",
       "status": "PASS",
-      "duration": 0.166065,
-      "timestamp": "2026-04-05T16:57:59.927469",
+      "duration": 0.056125,
+      "timestamp": "2026-04-14T22:35:55.568228",
       "details": "All 25 serialized updates completed; final={\"v\": \"T2_it4\"}"
     },
     {
       "test": "F1_FAILURE_ROLLBACK_ON_EXCEPTION",
       "status": "PASS",
-      "duration": 0.013861,
-      "timestamp": "2026-04-05T16:57:59.941812",
+      "duration": 0.005656,
+      "timestamp": "2026-04-14T22:35:55.574470",
       "details": "Rollback succeeded: baseline=1, dirty_mid=2, final=1"
     },
     {
       "test": "F2_FAILURE_CRASH_RECOVERY",
       "status": "PASS",
-      "duration": 0.007204,
-      "timestamp": "2026-04-05T16:57:59.949250",
+      "duration": 0.002783,
+      "timestamp": "2026-04-14T22:35:55.577590",
       "details": "Crash-recovery via WAL replay: record={'value': 'survived'}"
     },
     {
       "test": "D1_DURABILITY_WAL_PERSISTED",
       "status": "PASS",
-      "duration": 0.032131,
-      "timestamp": "2026-04-05T16:57:59.981581",
+      "duration": 0.011423,
+      "timestamp": "2026-04-14T22:35:55.589466",
       "details": "WAL contains 5 INSERT + 5 COMMIT records \u2014 durability proven"
     },
     {
       "test": "S1_STRESS_HIGH_THROUGHPUT",
       "status": "PASS",
-      "duration": 7.266939,
-      "timestamp": "2026-04-05T16:58:07.248838",
-      "details": "1000 ops in 7.27s \u2192 138 ops/s | success=1000/1000 (100.0%)"
+      "duration": 2.905256,
+      "timestamp": "2026-04-14T22:35:58.495097",
+      "details": "1000 ops in 2.91s \u2192 344 ops/s | success=1000/1000 (100.0%)"
     }
   ]
 }

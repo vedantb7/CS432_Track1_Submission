@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-04-05T16:58:19.066410",
+  "timestamp": "2026-04-14T21:52:21.371112",
   "summary": {
     "total": 5,
     "passed": 5,
@@ -10,8 +10,8 @@
     {
       "test": "API_A1_CONCURRENT_CHECKOUT_ATOMICITY",
       "status": "PASS",
-      "duration": 2.025154,
-      "timestamp": "2026-04-05T16:58:16.618372",
+      "duration": 1.965626,
+      "timestamp": "2026-04-14T21:52:19.189688",
       "details": "Stock integrity preserved: 0 remaining (20 orders, 0 rejected)",
       "metrics": {
         "virtual_users": 20,
@@ -19,16 +19,16 @@
         "failed_orders": 0,
         "remaining_stock": 0,
         "expected_stock": 0,
-        "p50_latency_s": 1.0295,
-        "p95_latency_s": 1.9276,
-        "p99_latency_s": 1.9276
+        "p50_latency_s": 1.0143,
+        "p95_latency_s": 1.9176,
+        "p99_latency_s": 1.9176
       }
     },
     {
       "test": "API_I1_RACE_CONDITION_LAST_UNIT",
       "status": "PASS",
-      "duration": 0.299291,
-      "timestamp": "2026-04-05T16:58:16.918179",
+      "duration": 0.13312,
+      "timestamp": "2026-04-14T21:52:19.323300",
       "details": "Race condition handled: exactly 1 buyer won, stock=0",
       "metrics": {
         "race_buyers": 15,
@@ -40,8 +40,8 @@
     {
       "test": "API_F1_FAILURE_INJECTION_ROLLBACK",
       "status": "PASS",
-      "duration": 0.051634,
-      "timestamp": "2026-04-05T16:58:16.970462",
+      "duration": 0.03412,
+      "timestamp": "2026-04-14T21:52:19.357872",
       "details": "Simulated failure returned 400; stock & balance rolled back correctly",
       "metrics": {
         "http_status": 400,
@@ -58,26 +58,26 @@
     {
       "test": "API_C1_CONCURRENT_USERS_CONFIGURABLE",
       "status": "PASS",
-      "duration": 2.04925,
-      "timestamp": "2026-04-05T16:58:19.020184",
-      "details": "All 20 virtual users completed successfully | p95=0.040s | 9.8 tx/s",
+      "duration": 1.976501,
+      "timestamp": "2026-04-14T21:52:21.334729",
+      "details": "All 20 virtual users completed successfully | p95=0.024s | 10.1 tx/s",
       "metrics": {
         "virtual_users": 20,
         "ramp_up_sec": 2,
         "successes": 20,
         "failures": 0,
-        "p50_latency_s": 0.0284,
-        "p95_latency_s": 0.0396,
-        "p99_latency_s": 0.0396,
-        "throughput_rps": 9.76
+        "p50_latency_s": 0.0153,
+        "p95_latency_s": 0.024,
+        "p99_latency_s": 0.024,
+        "throughput_rps": 10.12
       }
     },
     {
       "test": "API_D1_PROCESS_RESTART_DURABILITY",
       "status": "PASS",
-      "duration": 0.038353,
-      "timestamp": "2026-04-05T16:58:19.065671",
-      "details": "Order 537167 committed and persisted in Orders table",
+      "duration": 0.027102,
+      "timestamp": "2026-04-14T21:52:21.370289",
+      "details": "Order 663926 committed and persisted in Orders table",
       "metrics": {}
     }
   ]

@@ -5,7 +5,7 @@
 // and payment_status table (not payment_date nullability).
 // ─────────────────────────────────────────────────────────────────────────────
 
-const BASE = 'http://127.0.0.1:5001/api/employee';
+const BASE = '/api/employee';
 
 /** Generic fetch wrapper — throws on non-OK responses. */
 async function apiFetch(path, options = {}) {
@@ -40,6 +40,18 @@ export const updateOrderStatus = (orderId, orderStatus) =>
     body: JSON.stringify({
       order_status: orderStatus,
       employee_id: JSON.parse(localStorage.getItem('user') || '{}').employeeId,
+    }),
+  });
+
+export const verifyOrder = (orderId, action, remarks = '', final_price = null, expected_delivery_time = null) =>
+  apiFetch(`/orders/${orderId}/verify`, {
+    method: 'PUT',
+    body: JSON.stringify({
+      employee_id: JSON.parse(localStorage.getItem('user') || '{}').employeeId,
+      action,
+      remarks,
+      final_price,
+      expected_delivery_time
     }),
   });
 

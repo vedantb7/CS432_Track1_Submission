@@ -3,11 +3,14 @@ import datetime
 
 # ── Valid DB statuses and the forward-only transition map ─────────────────────
 DB_STATUSES = (
+    'Awaiting Verification', 'Rejected',
     'Pending', 'Picked Up', 'Washing', 'Processing',
     'Ironing', 'Ready for Delivery', 'Delivered', 'Cancelled'
 )
 
 STATUS_TRANSITIONS = {
+    'Awaiting Verification': ['Pending', 'Rejected'],
+    'Rejected':              ['Awaiting Verification'],
     'Pending':              ['Picked Up',           'Cancelled'],
     'Picked Up':            ['Washing',             'Cancelled'],
     'Washing':              ['Processing',          'Cancelled'],
@@ -20,6 +23,8 @@ STATUS_TRANSITIONS = {
 
 # Frontend-to-DB status mapping
 FRONTEND_TO_DB = {
+    'awaiting':   'Awaiting Verification',
+    'rejected':   'Rejected',
     'pending':    'Pending',
     'processing': 'Processing',
     'completed':  'Delivered',   # "Completed" in UI maps to "Delivered" in DB
@@ -28,6 +33,8 @@ FRONTEND_TO_DB = {
 
 # DB-to-frontend mapping for display
 DB_TO_FRONTEND = {
+    'Awaiting Verification': 'awaiting',
+    'Rejected':              'rejected',
     'Pending':              'pending',
     'Picked Up':            'processing',
     'Washing':              'processing',
