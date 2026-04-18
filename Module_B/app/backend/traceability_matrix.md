@@ -1,6 +1,6 @@
 # Traceability Matrix — CS432 Track 1 Module B
 
-_Generated: 2026-04-18 02:38:55_
+_Generated: 2026-04-19 11:27:12_
 
 | Req ID | Requirement | Test Name | How to Run | Expected Result | Layer | Actual Result |
 |--------|-------------|-----------|------------|-----------------|-------|---------------|
@@ -13,10 +13,10 @@ _Generated: 2026-04-18 02:38:55_
 | R7 | Failure simulation — mid-txn exception causes complete  | `F1_FAILURE_ROLLBACK_ON_EXCEPTION` | `python3 test_acid_db_level.py` | final count == baseline count (rollback verif | DB | ✅ PASS: Rollback succeeded: baseline=1, dirty_mid=2, final=1 |
 | R8 | Durability / Crash recovery — committed data replayed b | `F2_FAILURE_CRASH_RECOVERY` | `python3 test_acid_db_level.py` | record 'rec_1' found after WAL replay | DB | ✅ PASS: Crash-recovery via WAL replay: record={'value': 'survived'} |
 | R9 | Durability — WAL contains ≥5 INSERT + COMMIT records on | `D1_DURABILITY_WAL_PERSISTED` | `python3 test_acid_db_level.py` | inserts >= 5 and commits >= 5 in log file | DB | ✅ PASS: WAL contains 5 INSERT + 5 COMMIT records — durability proven |
-| R10 | Stress — 100 concurrent threads × 100 ops, ≥90 % succes | `S1_STRESS_HIGH_THROUGHPUT` | `python3 test_acid_db_level.py` | ≥9000/10000 ops succeed | DB | ✅ PASS: 1000 ops in 0.97s → 1031 ops/s | success=1000/1000 (100.0%) |
+| R10 | Stress — 100 concurrent threads × 100 ops, ≥90 % succes | `S1_STRESS_HIGH_THROUGHPUT` | `python3 test_acid_db_level.py` | ≥9000/10000 ops succeed | DB | ✅ PASS: 1000 ops in 2.13s → 470 ops/s | success=1000/1000 (100.0%) |
 | R11 | API Atomicity — concurrent checkout does not oversell ( | `API_A1_CONCURRENT_CHECKOUT_ATOMICIT` | `python3 test_acid_api_level.py` | remaining_stock == initial_stock - successful | API | ✅ PASS: Stock integrity preserved: 0 remaining (20 orders, 0 rejecte |
 | R12 | API Race condition — 15 threads race for last unit; exa | `API_I1_RACE_CONDITION_LAST_UNIT` | `python3 test_acid_api_level.py` | successes==1, stock==0 | API | ✅ PASS: Race condition handled: exactly 1 buyer won, stock=0 |
 | R13 | API Failure injection — simulate_failure=true returns 4 | `API_F1_FAILURE_INJECTION_ROLLBACK` | `python3 test_acid_api_level.py` | HTTP 400, stock==initial, balance==initial | API | ✅ PASS: Simulated failure returned 400; stock & balance rolled back  |
-| R14 | API Concurrent users — 20 virtual users (configurable)  | `API_C1_CONCURRENT_USERS_CONFIGURABL` | `python3 test_acid_api_level.py` | failures==0; p95 < 2 s | API | ✅ PASS: All 20 virtual users completed successfully | p95=0.013s | 1 |
-| R15 | API Durability — committed order persists in Orders tab | `API_D1_PROCESS_RESTART_DURABILITY` | `python3 test_acid_api_level.py` | order_id found in Orders B+Tree | API | ✅ PASS: Order 837299 committed and persisted in Orders table |
-| R16 | Stress test — Locust 50 VU, 120 s, error rate <5 %, p95 | `Locust — CheckoutUser + ReadUser` | `python3 run_locust_headless.py` | all 3 pass criteria met | Stress | ✅ PASS: p95=0.0ms, err=0.0%, tput=180.66 RPS |
+| R14 | API Concurrent users — 20 virtual users (configurable)  | `API_C1_CONCURRENT_USERS_CONFIGURABL` | `python3 test_acid_api_level.py` | failures==0; p95 < 2 s | API | ✅ PASS: All 20 virtual users completed successfully | p95=0.019s | 1 |
+| R15 | API Durability — committed order persists in Orders tab | `API_D1_PROCESS_RESTART_DURABILITY` | `python3 test_acid_api_level.py` | order_id found in Orders B+Tree | API | ✅ PASS: Order 929057 committed and persisted in Orders table |
+| R16 | Stress test — Locust 50 VU, 120 s, error rate <5 %, p95 | `Locust — CheckoutUser + ReadUser` | `python3 run_locust_headless.py` | all 3 pass criteria met | Stress | ✅ PASS: p95=0.0ms, err=0.0%, tput=171.72 RPS |

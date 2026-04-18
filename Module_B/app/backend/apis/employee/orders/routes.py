@@ -43,8 +43,10 @@ def get_assigned_orders(employee_id):
     cur  = conn.cursor()
     try:
         # Scatter-Gather Pattern
+        print(f"\n[SCATTER-GATHER] Fetching all orders assigned to employee_id={employee_id} across ALL shards...")
         results = []
         for shard_id in range(N_SHARDS):
+            print(f"  -> [SCATTER] Querying shard={shard_id}")
             table_lo = f"freshwash.shard_{shard_id}_laundry_order"
             table_oa = f"freshwash.shard_{shard_id}_order_assignment"
             
@@ -64,6 +66,7 @@ def get_assigned_orders(employee_id):
                 (employee_id, employee_id)
             )
             results.extend(cur.fetchall())
+        print(f"[GATHER] Finished gathering {len(results)} assigned orders from shards.\n")
         
         # Sort merged results by order_date DESC
         results.sort(key=lambda r: r[3], reverse=True)
