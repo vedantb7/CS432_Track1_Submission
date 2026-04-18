@@ -1,43 +1,43 @@
-from db import get_connection
+from db import get_shard_connection
+from shard_router import N_SHARDS
+
 
 def verify_counts():
-    conn = get_connection()
-    cur = conn.cursor()
-    try:
-        cur.execute("SELECT COUNT(*) FROM freshwash.laundry_order_backup")
-        orig = cur.fetchone()[0]
+    order_ids = {}
+    total_rows = 0
 
-        cur.execute("""
-            SELECT
-            (SELECT COUNT(*) FROM freshwash.shard_0_laundry_order) +
-            (SELECT COUNT(*) FROM freshwash.shard_1_laundry_order) +
-            (SELECT COUNT(*) FROM freshwash.shard_2_laundry_order)
-        """)
-        sharded = cur.fetchone()[0]
+    for shard_id in range(N_SHARDS):
+        conn = get_shard_connection(shard_id)
+        cur = conn.cursor()
+        try:
+            cur.execute("SELECT @@hostname")
+            hostname = cur.fetchone()[0]
 
-        assert orig == sharded, f"Data loss or duplication detected! Orig: {orig}, Sharded: {sharded}"
-        print(f"Data counts match! Original: {orig}, Sharded: {sharded}")
+            cur.execute("SELECT COUNT(*) FROM laundry_order")
+            shard_count = cur.fetchone()[0]
+            total_rows += shard_count
+            print(f"Shard {shard_id} ({hostname}) row_count={shard_count}")
 
-        # Check for duplication (No Duplication Guard)
-        cur.execute("""
-            SELECT order_id, COUNT(*) 
-            FROM (
-                SELECT order_id FROM freshwash.shard_0_laundry_order
-                UNION ALL
-                SELECT order_id FROM freshwash.shard_1_laundry_order
-                UNION ALL
-                SELECT order_id FROM freshwash.shard_2_laundry_order
-            ) t
-            GROUP BY order_id
-            HAVING COUNT(*) > 1;
-        """)
-        duplicates = cur.fetchall()
-        assert len(duplicates) == 0, f"Duplications found: {duplicates}"
-        print("No duplication found!")
+            cur.execute("SELECT order_id, member_id FROM laundry_order")
+            for order_id, member_id in cur.fetchall():
+                owner_shard = member_id % N_SHARDS
+                if owner_shard != shard_id:
+                    raise AssertionError(
+                        f"Ownership violation: order_id={order_id}, member_id={member_id}, "
+                        f"expected_shard={owner_shard}, actual_shard={shard_id}"
+                    )
+                if order_id in order_ids:
+                    raise AssertionError(
+                        f"Duplicate order_id across shards: {order_id} "
+                        f"(seen in shard {order_ids[order_id]} and {shard_id})"
+                    )
+                order_ids[order_id] = shard_id
+        finally:
+            cur.close()
+            conn.close()
 
-    finally:
-        cur.close()
-        conn.close()
+    print(f"Total sharded rows: {total_rows}")
+    print("No duplication found and ownership checks passed!")
 
 if __name__ == "__main__":
     verify_counts()

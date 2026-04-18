@@ -25,6 +25,23 @@ bash VERIFY_COMPLETE.sh
 ```
 *Note: This runs database checks, starts the Flask server, runs API validation, executes a Locust stress test (if installed), and generates a master evidence report.*
 
+### Distributed MySQL Shard Configuration (Assignment 4 Runtime)
+The backend now routes sharded queries to physical MySQL shards using these environment variables:
+
+```bash
+export SHARD_HOST=10.0.116.184
+export SHARD_PORTS=3307,3308,3309
+export SHARD_DATABASE=BottleNeck
+export SHARD_USER=BottleNeck
+export SHARD_PASSWORD='password@123'
+```
+
+Then run:
+```bash
+cd Module_B/app/backend/
+python3 verify_sharding.py
+```
+
 ### Test Module B Concurrency Only (10 seconds)
 ```bash
 cd Module_B/app/backend/
@@ -323,4 +340,3 @@ sudo apt-get install postgresql postgresql-contrib
 **Date**: March 23 – April 5, 2026
 
 © 2026 Indian Institute of Technology, Gandhinagar. All rights reserved.
-

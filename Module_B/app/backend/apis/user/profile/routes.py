@@ -1,6 +1,5 @@
 from flask import Blueprint, jsonify, request
-from db import get_connection
-from psycopg2 import IntegrityError, ProgrammingError, OperationalError
+from db import get_connection, IntegrityError, ProgrammingError, OperationalError
 
 profile_bp = Blueprint('user_profile', __name__)
 

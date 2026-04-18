@@ -3,6 +3,7 @@ psycopg2
 flask
 flask-cors
 psycopg2-binary
+pymysql
 Faker
 pandas
 matplotlib

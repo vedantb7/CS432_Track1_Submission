@@ -1,7 +1,6 @@
 from flask import Blueprint, jsonify, request
-from db import get_connection
+from db import get_connection, IntegrityError, ProgrammingError, OperationalError
 from auth import add_employee
-from psycopg2 import IntegrityError, ProgrammingError, OperationalError
 from logging_utils import audit_log
 
 employees_bp = Blueprint('admin_employees', __name__)

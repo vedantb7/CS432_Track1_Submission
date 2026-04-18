@@ -1,7 +1,6 @@
 import random
 from datetime import datetime, timedelta
 from faker import Faker
-import psycopg2
 import sys
 import os
 

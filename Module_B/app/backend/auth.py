@@ -1,6 +1,4 @@
-import psycopg2
-from psycopg2 import IntegrityError, ProgrammingError, OperationalError
-from db import get_connection
+from db import get_connection, IntegrityError, ProgrammingError, OperationalError
 import uuid
 from datetime import datetime, timedelta
 import re
@@ -10,7 +8,7 @@ def handle_db_error(error, context="operation"):
     Convert database errors to user-friendly messages.
     
     Args:
-        error: The exception from psycopg2
+        error: The exception from the configured DB driver
         context: Context about what operation was attempted
     
     Returns:
@@ -338,4 +336,3 @@ def add_employee(employee_data):
     finally:
         cur.close()
         conn.close()
-

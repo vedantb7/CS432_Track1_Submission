@@ -6,10 +6,22 @@ orders_bp = Blueprint('admin_orders', __name__)
 
 @orders_bp.route('/orders', methods=['GET'])
 def get_all_orders():
-    """Get all laundry orders with member details"""
+    """Get all laundry orders with optional cross-shard date range filtering."""
     conn = get_connection()
     cur = conn.cursor()
     try:
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        filters = []
+        params = []
+        if start_date:
+            filters.append("lo.order_date >= %s")
+            params.append(start_date)
+        if end_date:
+            filters.append("lo.order_date <= %s")
+            params.append(end_date)
+        where_clause = f"WHERE {' AND '.join(filters)}" if filters else ""
+
         results = []
         for shard_id in range(N_SHARDS):
             table_lo = f"freshwash.shard_{shard_id}_laundry_order"
@@ -18,6 +30,9 @@ def get_all_orders():
                 f"lo.total_amount, lo.current_status "
                 f"FROM {table_lo} lo "
                 f"JOIN freshwash.member m ON lo.member_id = m.member_id "
+                f"{where_clause} "
+                f"ORDER BY lo.order_date DESC",
+                tuple(params),
             )
             results.extend(cur.fetchall())
         
