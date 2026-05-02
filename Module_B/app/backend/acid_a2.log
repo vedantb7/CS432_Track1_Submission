@@ -1,6 +1,0 @@
-{"type": "BEGIN", "txn": "T1", "lsn": 1}
-{"type": "INSERT", "txn": "T1", "table": "Staging", "key": 1, "after": "baseline", "lsn": 2}
-{"type": "COMMIT", "txn": "T1", "lsn": 3}
-{"type": "BEGIN", "txn": "T2", "lsn": 4}
-{"type": "INSERT", "txn": "T2", "table": "Staging", "key": 2, "after": "should_disappear", "lsn": 5}
-{"type": "ROLLBACK", "txn": "T2", "lsn": 6}

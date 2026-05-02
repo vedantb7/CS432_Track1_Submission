@@ -1,5 +1,0 @@
-{"type": "BEGIN", "txn": "T1", "lsn": 1}
-{"type": "INSERT", "txn": "T1", "table": "Users", "key": 9901, "after": "{\"name\": \"Bob\", \"balance\": 100}", "lsn": 2}
-{"type": "COMMIT", "txn": "T1", "lsn": 3}
-{"type": "BEGIN", "txn": "T2", "lsn": 4}
-{"type": "ROLLBACK", "txn": "T2", "lsn": 5}
